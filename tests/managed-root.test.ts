@@ -4,7 +4,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent"
 
 import { ManagedWidgetRoot } from "../src/managed-root.ts"
 import type { WidgetRecord } from "../src/registry.ts"
-import type { ManagedWidgetContent } from "../src/types.ts"
+import type { ManagedWidgetContent, ManagedWidgetFactory } from "../src/types.ts"
 
 function record(
   key: string,
@@ -32,11 +32,15 @@ function component(lines: string[], onDispose?: () => void): Component & { dispo
   }
 }
 
+function fakeTui(onRender = () => undefined): TUI {
+  return { requestRender: onRender } as unknown as TUI
+}
+
 describe("ManagedWidgetRoot", () => {
   test("renders managed records in registry order", () => {
     const root = new ManagedWidgetRoot(
       [record("first", ["one"], 0), record("second", ["two", "three"], 1)],
-      {} as TUI,
+      fakeTui(),
       {} as Theme,
     )
 
@@ -47,7 +51,7 @@ describe("ManagedWidgetRoot", () => {
     let disposed = false
     let receivedTui: TUI | undefined
     let receivedTheme: Theme | undefined
-    const tui = {} as TUI
+    const tui = fakeTui()
     const theme = {} as Theme
     const content: ManagedWidgetContent = (actualTui, actualTheme) => {
       receivedTui = actualTui
@@ -67,6 +71,58 @@ describe("ManagedWidgetRoot", () => {
     expect(root.render(20)).toEqual([])
   })
 
+  test("reuses unchanged components and reconciles changed or removed keys", () => {
+    let renders = 0
+    let aCreates = 0
+    let aDisposals = 0
+    let bCreates = 0
+    let bDisposals = 0
+    const tui = fakeTui(() => {
+      renders += 1
+    })
+    const makeA = (): ManagedWidgetFactory => () => {
+      aCreates += 1
+      return component(["a"], () => {
+        aDisposals += 1
+      })
+    }
+    const b: ManagedWidgetContent = () => {
+      bCreates += 1
+      return component(["b"], () => {
+        bDisposals += 1
+      })
+    }
+    const aContent = makeA()
+    const root = new ManagedWidgetRoot(
+      [record("a", aContent, 0), record("b", b, 1)],
+      tui,
+      {} as Theme,
+    )
+
+    root.update([record("a", aContent, 0), record("b", b, 1)])
+    expect(aCreates).toBe(1)
+    expect(bCreates).toBe(1)
+    expect(aDisposals).toBe(0)
+    expect(bDisposals).toBe(0)
+    expect(renders).toBe(1)
+
+    const replacementA = makeA()
+    root.update([record("a", replacementA, 0), record("b", b, 1)])
+    expect(aCreates).toBe(2)
+    expect(aDisposals).toBe(1)
+    expect(bCreates).toBe(1)
+    expect(bDisposals).toBe(0)
+
+    root.update([record("b", b, 1)])
+    expect(aDisposals).toBe(2)
+    expect(bDisposals).toBe(0)
+    expect(root.render(20)).toEqual(["b"])
+
+    root.dispose()
+    root.dispose()
+    expect(bDisposals).toBe(1)
+  })
+
   test("truncates long string content like the native widget path", () => {
     const theme = { fg: (_color: string, text: string) => `muted:${text}` } as unknown as Theme
     const root = new ManagedWidgetRoot(
@@ -77,7 +133,7 @@ describe("ManagedWidgetRoot", () => {
           0,
         ),
       ],
-      {} as TUI,
+      fakeTui(),
       theme,
     )
 

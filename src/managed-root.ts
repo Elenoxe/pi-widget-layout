@@ -6,39 +6,79 @@ import type { ManagedWidgetComponent, ManagedWidgetContent } from "./types.ts"
 
 const MAX_WIDGET_LINES = 10
 
+interface CachedWidget {
+  content: ManagedWidgetContent
+  component: ManagedWidgetComponent
+}
+
 export class ManagedWidgetRoot extends Container {
-  private readonly widgets: ManagedWidgetComponent[] = []
+  private readonly cachedWidgets = new Map<string, CachedWidget>()
+  private readonly tui: TUI
+  private readonly theme: Theme
 
   constructor(records: readonly WidgetRecord<ManagedWidgetContent>[], tui: TUI, theme: Theme) {
     super()
+    this.tui = tui
+    this.theme = theme
+    this.reconcile(records)
+  }
+
+  update(records: readonly WidgetRecord<ManagedWidgetContent>[]): void {
+    this.reconcile(records)
+    this.tui.requestRender()
+  }
+
+  dispose(): void {
+    for (const widget of this.cachedWidgets.values()) {
+      widget.component.dispose?.()
+    }
+
+    this.cachedWidgets.clear()
+    this.clear()
+  }
+
+  private reconcile(records: readonly WidgetRecord<ManagedWidgetContent>[]): void {
+    const nextWidgets = new Map<string, CachedWidget>()
+    const nextChildren: ManagedWidgetComponent[] = []
 
     for (const record of records) {
       if (record.content === undefined) {
         continue
       }
 
-      const component = this.createComponent(record.content, tui, theme)
-      this.widgets.push(component)
-      this.addChild(component)
-    }
-  }
+      const cached = this.cachedWidgets.get(record.key)
+      if (cached !== undefined && cached.content === record.content) {
+        nextWidgets.set(record.key, cached)
+        nextChildren.push(cached.component)
+        continue
+      }
 
-  dispose(): void {
-    for (const widget of this.widgets) {
-      widget.dispose?.()
+      cached?.component.dispose?.()
+      const component = this.createComponent(record.content)
+      nextWidgets.set(record.key, { content: record.content, component })
+      nextChildren.push(component)
     }
 
-    this.widgets.length = 0
+    for (const [key, cached] of this.cachedWidgets) {
+      if (!nextWidgets.has(key)) {
+        cached.component.dispose?.()
+      }
+    }
+
+    this.cachedWidgets.clear()
+    for (const [key, cached] of nextWidgets) {
+      this.cachedWidgets.set(key, cached)
+    }
+
     this.clear()
+    for (const child of nextChildren) {
+      this.addChild(child)
+    }
   }
 
-  private createComponent(
-    content: ManagedWidgetContent,
-    tui: TUI,
-    theme: Theme,
-  ): ManagedWidgetComponent {
+  private createComponent(content: ManagedWidgetContent): ManagedWidgetComponent {
     if (typeof content === "function") {
-      return content(tui, theme)
+      return content(this.tui, this.theme)
     }
 
     const container = new Container()
@@ -47,7 +87,7 @@ export class ManagedWidgetRoot extends Container {
     }
 
     if (content.length > MAX_WIDGET_LINES) {
-      container.addChild(new Text(theme.fg("muted", "... (widget truncated)"), 1, 0))
+      container.addChild(new Text(this.theme.fg("muted", "... (widget truncated)"), 1, 0))
     }
 
     return container

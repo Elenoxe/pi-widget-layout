@@ -24,7 +24,12 @@ class FakeUi implements WidgetLayoutUI {
     content: ManagedWidgetContent | undefined
     placement?: WidgetPlacement
   }> = []
-  private readonly tui = {} as TUI
+  renderRequests = 0
+  private readonly tui = {
+    requestRender: () => {
+      this.renderRequests += 1
+    },
+  } as unknown as TUI
   private readonly theme = {} as Theme
 
   setWidget(
@@ -76,7 +81,7 @@ function root(ui: FakeUi): Component & { dispose?(): void } {
 }
 
 describe("WidgetLayoutController", () => {
-  test("routes managed content through one root", () => {
+  test("routes managed content through one persistent root", () => {
     const ui = new FakeUi()
     const controller = new WidgetLayoutController(ui, config())
     controller.install()
@@ -92,7 +97,8 @@ describe("WidgetLayoutController", () => {
     ).toEqual([" first", " second"])
     expect(
       ui.calls.filter((call) => call.key === MANAGED_WIDGET_KEY && call.content !== undefined),
-    ).toHaveLength(2)
+    ).toHaveLength(1)
+    expect(ui.renderRequests).toBe(1)
   })
 
   test("forwards native widgets without mounting a root", () => {
@@ -141,6 +147,38 @@ describe("WidgetLayoutController", () => {
       content: ["native"],
       placement: "belowEditor",
     })
+  })
+
+  test("leaves a disposed interceptor transparent in a later wrapper", () => {
+    const ui = new FakeUi()
+    const controller = new WidgetLayoutController(ui, config())
+    controller.install()
+    ui.setWidget("managed", ["before"])
+
+    const previous = ui.setWidget
+    let laterCalls = 0
+    const later = ((
+      key: string,
+      content: ManagedWidgetContent | undefined,
+      options?: { placement?: WidgetPlacement },
+    ) => {
+      laterCalls += 1
+      if (typeof content === "function") {
+        previous(key, content, options)
+      } else {
+        previous(key, content, options)
+      }
+    }) as typeof ui.setWidget
+    ui.setWidget = later
+
+    controller.dispose()
+    expect(ui.setWidget).toBe(later)
+    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+
+    ui.setWidget("managed", ["after"])
+    expect(laterCalls).toBe(1)
+    expect(ui.widgets.get("managed")).toMatchObject({ content: ["after"] })
+    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
   })
 
   test("dispose restores the original setter and clears only the managed root", () => {

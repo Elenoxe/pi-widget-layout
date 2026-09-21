@@ -23,7 +23,7 @@ export class WidgetLayoutController {
   private readonly interceptedSetWidget: WidgetSetHandler
   private readonly compiledOrder
   private readonly registry = new WidgetRegistry<ManagedWidgetContent>()
-  private rootMounted = false
+  private root?: ManagedWidgetRoot
   private installed = false
 
   constructor(
@@ -33,6 +33,11 @@ export class WidgetLayoutController {
     this.originalSetWidget = ui.setWidget
     this.boundOriginalSetWidget = ui.setWidget.bind(ui)
     this.interceptedSetWidget = (key, content, options) => {
+      if (!this.installed) {
+        this.callOriginalSetWidget(key, content, options)
+        return
+      }
+
       this.handleSetWidget(key, content, options)
     }
     this.compiledOrder = compileOrder(config.aboveEditor.order)
@@ -48,9 +53,10 @@ export class WidgetLayoutController {
   }
 
   dispose(): void {
-    if (this.rootMounted) {
+    const root = this.root
+    this.root = undefined
+    if (root !== undefined) {
       this.callOriginalSetWidget(MANAGED_WIDGET_KEY, undefined)
-      this.rootMounted = false
     }
 
     this.registry.reset()
@@ -85,6 +91,7 @@ export class WidgetLayoutController {
       route.placement === requestedPlacement ? options : { ...options, placement: route.placement }
     this.callOriginalSetWidget(key, content, nativeOptions)
   }
+
   private callOriginalSetWidget(
     key: string,
     content: ManagedWidgetContent | undefined,
@@ -97,21 +104,30 @@ export class WidgetLayoutController {
 
     this.boundOriginalSetWidget(key, content, options)
   }
+
   private refreshManagedRoot(): void {
     const records = this.registry.getActiveRecords()
     if (records.length === 0) {
-      if (this.rootMounted) {
+      if (this.root !== undefined) {
+        this.root = undefined
         this.callOriginalSetWidget(MANAGED_WIDGET_KEY, undefined)
-        this.rootMounted = false
       }
+      return
+    }
+
+    if (this.root !== undefined) {
+      this.root.update(records)
       return
     }
 
     this.callOriginalSetWidget(
       MANAGED_WIDGET_KEY,
-      (tui, theme) => new ManagedWidgetRoot(records, tui, theme),
+      (tui, theme) => {
+        const root = new ManagedWidgetRoot(records, tui, theme)
+        this.root = root
+        return root
+      },
       { placement: "aboveEditor" },
     )
-    this.rootMounted = true
   }
 }
