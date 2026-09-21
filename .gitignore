@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+
+# Pi/Fabric local state
+.pi/
+
+# build output
+dist/
+out/
+*.tgz
+
+# test and coverage output
+coverage/
+*.lcov
+
+# logs
+logs/
+*.log
+
+# environment files
+.env
+.env.*.local
+
+# caches
+.cache/
+*.tsbuildinfo
+
+# IDE and OS files
+.idea/
+.DS_Store
+

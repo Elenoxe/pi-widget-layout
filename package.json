@@ -1,0 +1,40 @@
+{
+  "name": "@eleno/pi-widget-layout",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "pi -e ./src/index.ts",
+    "test": "bun test --pass-with-no-tests",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . --no-error-on-unmatched-pattern",
+    "lint:fix": "oxlint . --fix --no-error-on-unmatched-pattern",
+    "format": "prettier --write --ignore-unknown .",
+    "format:check": "prettier --check --ignore-unknown .",
+    "check": "bun run typecheck && bun run lint && bun run format:check",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
+    "oxlint": "^1.83.0",
+    "prettier": "3.9.8",
+    "typescript": "^7"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs}": [
+      "prettier --write --ignore-unknown",
+      "oxlint --fix"
+    ],
+    "*.{json,jsonc,yml,yaml,md}": "prettier --write --ignore-unknown"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.86.1"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
