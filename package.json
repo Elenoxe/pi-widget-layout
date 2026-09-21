@@ -30,7 +30,8 @@
     "*.{json,jsonc,yml,yaml,md}": "prettier --write --ignore-unknown"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.86.1"
+    "@earendil-works/pi-coding-agent": "^0.86.1",
+    "@earendil-works/pi-tui": "^0.86.1"
   },
   "pi": {
     "extensions": [
