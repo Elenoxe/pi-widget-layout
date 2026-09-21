@@ -7,7 +7,7 @@ import {
   WidgetLayoutController,
   type WidgetLayoutUI,
 } from "../src/layout-controller.ts"
-import type { ManagedWidgetContent } from "../src/types.ts"
+import type { ManagedWidgetContent, ManagedWidgetFactory } from "../src/types.ts"
 import type { WidgetPlacement } from "../src/types.ts"
 import { createDefaultConfig } from "../src/config.ts"
 
@@ -27,11 +27,21 @@ class FakeUi implements WidgetLayoutUI {
   private readonly tui = {} as TUI
   private readonly theme = {} as Theme
 
-  setWidget = (
+  setWidget(
+    key: string,
+    content: string[] | undefined,
+    options?: { placement?: WidgetPlacement },
+  ): void
+  setWidget(
+    key: string,
+    content: ManagedWidgetFactory | undefined,
+    options?: { placement?: WidgetPlacement },
+  ): void
+  setWidget(
     key: string,
     content: ManagedWidgetContent | undefined,
     options?: { placement?: WidgetPlacement },
-  ): void => {
+  ): void {
     const existing = this.widgets.get(key)
     existing?.component?.dispose?.()
     this.calls.push({ key, content, placement: options?.placement })

@@ -81,7 +81,9 @@ export class WidgetLayoutController {
 
     this.registry.clear(key)
     this.refreshManagedRoot()
-    this.callOriginalSetWidget(key, content, options)
+    const nativeOptions =
+      route.placement === requestedPlacement ? options : { ...options, placement: route.placement }
+    this.callOriginalSetWidget(key, content, nativeOptions)
   }
   private callOriginalSetWidget(
     key: string,
