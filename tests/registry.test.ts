@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import { WidgetRegistry } from "../src/registry.ts"
 import type { WidgetRecord } from "../src/registry.ts"
-import type { ManagedWidgetRoute } from "../src/layout.ts"
+import type { ManagedWidgetRoute } from "../src/routing.ts"
 
 function selectorRoute(index: number, selector = "*"): ManagedWidgetRoute {
   return {

@@ -3,17 +3,17 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import type { ExtensionWidgetOptions } from "@earendil-works/pi-coding-agent"
 
 import extension from "../src/index.ts"
-import type { ManagedWidgetContent } from "../src/types.ts"
+import type { WidgetContent } from "../src/types.ts"
 
 interface FakeUi {
   setWidget: (
     key: string,
-    content: ManagedWidgetContent | undefined,
+    content: WidgetContent | undefined,
     options?: ExtensionWidgetOptions,
   ) => void
   calls: Array<{
     key: string
-    content: ManagedWidgetContent | undefined
+    content: WidgetContent | undefined
     options?: ExtensionWidgetOptions
   }>
   notifications: Array<{ message: string; type?: "info" | "warning" | "error" }>

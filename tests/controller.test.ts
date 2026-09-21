@@ -2,17 +2,13 @@ import { describe, expect, test } from "bun:test"
 import type { Component, TUI } from "@earendil-works/pi-tui"
 import type { Theme } from "@earendil-works/pi-coding-agent"
 
-import {
-  MANAGED_WIDGET_KEY,
-  WidgetLayoutController,
-  type WidgetLayoutUI,
-} from "../src/layout-controller.ts"
-import type { ManagedWidgetContent, ManagedWidgetFactory } from "../src/types.ts"
+import { HOST_WIDGET_KEY, WidgetLayoutController, type WidgetLayoutUI } from "../src/controller.ts"
+import type { WidgetContent, WidgetFactory } from "../src/types.ts"
 import type { WidgetPlacement } from "../src/types.ts"
 import { createDefaultConfig } from "../src/config.ts"
 
 interface FakeWidget {
-  content: ManagedWidgetContent
+  content: WidgetContent
   placement: WidgetPlacement
   component?: Component & { dispose?(): void }
 }
@@ -21,7 +17,7 @@ class FakeUi implements WidgetLayoutUI {
   readonly widgets = new Map<string, FakeWidget>()
   readonly calls: Array<{
     key: string
-    content: ManagedWidgetContent | undefined
+    content: WidgetContent | undefined
     placement?: WidgetPlacement
   }> = []
   renderRequests = 0
@@ -39,12 +35,12 @@ class FakeUi implements WidgetLayoutUI {
   ): void
   setWidget(
     key: string,
-    content: ManagedWidgetFactory | undefined,
+    content: WidgetFactory | undefined,
     options?: { placement?: WidgetPlacement },
   ): void
   setWidget(
     key: string,
-    content: ManagedWidgetContent | undefined,
+    content: WidgetContent | undefined,
     options?: { placement?: WidgetPlacement },
   ): void {
     const existing = this.widgets.get(key)
@@ -72,16 +68,16 @@ function config(unlisted: "native" | "above" | "below" = "native") {
   }
 }
 
-function root(ui: FakeUi): Component & { dispose?(): void } {
-  const component = ui.widgets.get(MANAGED_WIDGET_KEY)?.component
+function host(ui: FakeUi): Component & { dispose?(): void } {
+  const component = ui.widgets.get(HOST_WIDGET_KEY)?.component
   if (component === undefined) {
-    throw new Error("managed root is not mounted")
+    throw new Error("managed host is not mounted")
   }
   return component
 }
 
 describe("WidgetLayoutController", () => {
-  test("routes managed content through one persistent root", () => {
+  test("routes managed content through one persistent host", () => {
     const ui = new FakeUi()
     const controller = new WidgetLayoutController(ui, config())
     controller.install()
@@ -89,28 +85,28 @@ describe("WidgetLayoutController", () => {
     ui.setWidget("managed", ["first"])
     ui.setWidget("managed-2", ["second"])
 
-    expect([...ui.widgets.keys()]).toEqual([MANAGED_WIDGET_KEY])
+    expect([...ui.widgets.keys()]).toEqual([HOST_WIDGET_KEY])
     expect(
-      root(ui)
+      host(ui)
         .render(40)
         .map((line) => line.trimEnd()),
     ).toEqual([" first", " second"])
     expect(
-      ui.calls.filter((call) => call.key === MANAGED_WIDGET_KEY && call.content !== undefined),
+      ui.calls.filter((call) => call.key === HOST_WIDGET_KEY && call.content !== undefined),
     ).toHaveLength(1)
     expect(ui.renderRequests).toBe(1)
   })
 
-  test("forwards native widgets without mounting a root", () => {
+  test("forwards native widgets without mounting a host", () => {
     const ui = new FakeUi()
     const controller = new WidgetLayoutController(ui, config())
     controller.install()
 
-    const content: ManagedWidgetContent = ["native"]
+    const content: WidgetContent = ["native"]
     ui.setWidget("other", content, { placement: "belowEditor" })
 
     expect(ui.widgets.get("other")).toMatchObject({ content, placement: "belowEditor" })
-    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+    expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
   })
 
   test("moves a widget from native ownership to managed ownership", () => {
@@ -123,14 +119,14 @@ describe("WidgetLayoutController", () => {
 
     expect(ui.widgets.has("managed")).toBe(false)
     expect(
-      root(ui)
+      host(ui)
         .render(40)
         .map((line) => line.trimEnd()),
     ).toEqual([" managed"])
     expect(ui.calls.slice(-3).map((call) => [call.key, call.content, call.placement])).toEqual([
       ["managed", ["native"], "belowEditor"],
       ["managed", undefined, undefined],
-      ["pi-widget-layout:managed-root", expect.any(Function), "aboveEditor"],
+      ["pi-widget-layout:host", expect.any(Function), "aboveEditor"],
     ])
   })
 
@@ -142,7 +138,7 @@ describe("WidgetLayoutController", () => {
     ui.setWidget("managed", ["managed"])
     ui.setWidget("managed", ["native"], { placement: "belowEditor" })
 
-    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+    expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
     expect(ui.widgets.get("managed")).toMatchObject({
       content: ["native"],
       placement: "belowEditor",
@@ -159,7 +155,7 @@ describe("WidgetLayoutController", () => {
     let laterCalls = 0
     const later = ((
       key: string,
-      content: ManagedWidgetContent | undefined,
+      content: WidgetContent | undefined,
       options?: { placement?: WidgetPlacement },
     ) => {
       laterCalls += 1
@@ -173,24 +169,24 @@ describe("WidgetLayoutController", () => {
 
     controller.dispose()
     expect(ui.setWidget).toBe(later)
-    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+    expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
 
     ui.setWidget("managed", ["after"])
     expect(laterCalls).toBe(1)
     expect(ui.widgets.get("managed")).toMatchObject({ content: ["after"] })
-    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+    expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
   })
 
-  test("dispose restores the original setter and clears only the managed root", () => {
+  test("dispose restores the previous setter and clears only the managed host", () => {
     const ui = new FakeUi()
-    const originalSetWidget = ui.setWidget
+    const previousSetWidget = ui.setWidget
     const controller = new WidgetLayoutController(ui, config())
     controller.install()
     ui.setWidget("managed", ["managed"])
 
     controller.dispose()
-    expect(ui.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
-    expect(ui.setWidget).toBe(originalSetWidget)
+    expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
+    expect(ui.setWidget).toBe(previousSetWidget)
 
     ui.setWidget("managed", ["native"], { placement: "belowEditor" })
     expect(ui.widgets.get("managed")).toMatchObject({ placement: "belowEditor" })

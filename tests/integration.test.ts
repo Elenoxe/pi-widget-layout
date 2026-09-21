@@ -3,22 +3,18 @@ import type { Component, TUI } from "@earendil-works/pi-tui"
 import type { Theme } from "@earendil-works/pi-coding-agent"
 
 import { createDefaultConfig } from "../src/config.ts"
-import {
-  MANAGED_WIDGET_KEY,
-  WidgetLayoutController,
-  type WidgetLayoutUI,
-} from "../src/layout-controller.ts"
-import type { ManagedWidgetContent, ManagedWidgetFactory, WidgetPlacement } from "../src/types.ts"
+import { HOST_WIDGET_KEY, WidgetLayoutController, type WidgetLayoutUI } from "../src/controller.ts"
+import type { WidgetContent, WidgetFactory, WidgetPlacement } from "../src/types.ts"
 
 interface MountedWidget {
-  content: ManagedWidgetContent
+  content: WidgetContent
   placement: WidgetPlacement
   component?: Component & { dispose?(): void }
 }
 
 class Harness implements WidgetLayoutUI {
   readonly widgets = new Map<string, MountedWidget>()
-  rootMounts = 0
+  hostMounts = 0
   renderRequests = 0
   private readonly tui = {
     requestRender: () => {
@@ -34,12 +30,12 @@ class Harness implements WidgetLayoutUI {
   ): void
   setWidget(
     key: string,
-    content: ManagedWidgetFactory | undefined,
+    content: WidgetFactory | undefined,
     options?: { placement?: WidgetPlacement },
   ): void
   setWidget(
     key: string,
-    content: ManagedWidgetContent | undefined,
+    content: WidgetContent | undefined,
     options?: { placement?: WidgetPlacement },
   ): void {
     this.widgets.get(key)?.component?.dispose?.()
@@ -49,8 +45,8 @@ class Harness implements WidgetLayoutUI {
       return
     }
 
-    if (key === MANAGED_WIDGET_KEY) {
-      this.rootMounts += 1
+    if (key === HOST_WIDGET_KEY) {
+      this.hostMounts += 1
     }
 
     const component = typeof content === "function" ? content(this.tui, this.theme) : undefined
@@ -73,28 +69,28 @@ function controllerFor(
   })
 }
 
-function managedRoot(harness: Harness): Component {
-  const root = harness.widgets.get(MANAGED_WIDGET_KEY)?.component
-  if (root === undefined) {
-    throw new Error("managed root is not mounted")
+function managedHost(harness: Harness): Component {
+  const host = harness.widgets.get(HOST_WIDGET_KEY)?.component
+  if (host === undefined) {
+    throw new Error("managed host is not mounted")
   }
-  return root
+  return host
 }
 
-function renderRoot(harness: Harness): string[] {
-  return managedRoot(harness)
+function renderHost(harness: Harness): string[] {
+  return managedHost(harness)
     .render(40)
     .map((line) => line.trimEnd())
 }
 
 describe("widget layout integration", () => {
-  test("keeps one root and unchanged children alive across transitions", () => {
+  test("keeps one host and unchanged children alive across transitions", () => {
     const harness = new Harness()
     const controller = controllerFor(harness, ["alpha", "beta"], "below")
     controller.install()
     let creates = 0
     let disposals = 0
-    const custom: ManagedWidgetFactory = () => {
+    const custom: WidgetFactory = () => {
       creates += 1
       return {
         render: () => [" custom"],
@@ -107,41 +103,41 @@ describe("widget layout integration", () => {
 
     harness.setWidget("alpha", ["alpha"])
     harness.setWidget("beta", custom)
-    expect(harness.rootMounts).toBe(1)
+    expect(harness.hostMounts).toBe(1)
     expect(creates).toBe(1)
     expect(disposals).toBe(0)
-    expect(renderRoot(harness)).toEqual([" alpha", " custom"])
+    expect(renderHost(harness)).toEqual([" alpha", " custom"])
 
     harness.setWidget("beta", custom)
-    expect(harness.rootMounts).toBe(1)
+    expect(harness.hostMounts).toBe(1)
     expect(creates).toBe(2)
     expect(disposals).toBe(1)
-    expect(renderRoot(harness)).toEqual([" alpha", " custom"])
+    expect(renderHost(harness)).toEqual([" alpha", " custom"])
 
     harness.setWidget("alpha", ["alpha-updated"])
-    expect(harness.rootMounts).toBe(1)
+    expect(harness.hostMounts).toBe(1)
     expect(creates).toBe(2)
     expect(disposals).toBe(1)
-    expect(renderRoot(harness)).toEqual([" alpha-updated", " custom"])
+    expect(renderHost(harness)).toEqual([" alpha-updated", " custom"])
 
     harness.setWidget("alpha", undefined)
-    expect(harness.rootMounts).toBe(1)
+    expect(harness.hostMounts).toBe(1)
     expect(creates).toBe(2)
     expect(disposals).toBe(1)
-    expect(renderRoot(harness)).toEqual([" custom"])
+    expect(renderHost(harness)).toEqual([" custom"])
 
     harness.setWidget("beta", undefined)
-    expect(harness.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
-    expect(harness.rootMounts).toBe(1)
+    expect(harness.widgets.has(HOST_WIDGET_KEY)).toBe(false)
+    expect(harness.hostMounts).toBe(1)
     expect(disposals).toBe(2)
 
     harness.setWidget("beta", custom)
-    expect(harness.rootMounts).toBe(2)
+    expect(harness.hostMounts).toBe(2)
     expect(creates).toBe(3)
     expect(disposals).toBe(2)
 
     controller.dispose()
-    expect(harness.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+    expect(harness.widgets.has(HOST_WIDGET_KEY)).toBe(false)
     expect(disposals).toBe(3)
   })
 
@@ -153,12 +149,12 @@ describe("widget layout integration", () => {
     harness.setWidget("other", ["other"])
     harness.setWidget("group-b", ["b"])
     harness.setWidget("exact", ["exact"])
-    expect(renderRoot(harness)).toEqual([" other", " b", " exact"])
+    expect(renderHost(harness)).toEqual([" other", " b", " exact"])
 
     harness.setWidget("group-b", undefined)
     harness.setWidget("group-b", ["b-readded"])
     harness.setWidget("group-a", ["a"])
-    expect(renderRoot(harness)).toEqual([" other", " b-readded", " a", " exact"])
+    expect(renderHost(harness)).toEqual([" other", " b-readded", " a", " exact"])
 
     controller.dispose()
   })
@@ -172,7 +168,7 @@ describe("widget layout integration", () => {
     nativeHarness.setWidget("managed", ["below"], { placement: "belowEditor" })
     expect(nativeHarness.widgets.get("unlisted")).toMatchObject({ placement: "aboveEditor" })
     expect(nativeHarness.widgets.get("managed")).toMatchObject({ placement: "belowEditor" })
-    expect(nativeHarness.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
+    expect(nativeHarness.widgets.has(HOST_WIDGET_KEY)).toBe(false)
     nativeController.dispose()
 
     const aboveHarness = new Harness()
@@ -180,11 +176,11 @@ describe("widget layout integration", () => {
     aboveController.install()
 
     aboveHarness.setWidget("unlisted", ["managed-unlisted"])
-    expect(renderRoot(aboveHarness)).toEqual([" managed-unlisted"])
+    expect(renderHost(aboveHarness)).toEqual([" managed-unlisted"])
 
     aboveHarness.setWidget("managed", ["below"], { placement: "belowEditor" })
     expect(aboveHarness.widgets.get("managed")).toMatchObject({ placement: "belowEditor" })
-    expect(renderRoot(aboveHarness)).toEqual([" managed-unlisted"])
+    expect(renderHost(aboveHarness)).toEqual([" managed-unlisted"])
     aboveController.dispose()
   })
 })

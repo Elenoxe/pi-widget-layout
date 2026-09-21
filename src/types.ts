@@ -19,8 +19,8 @@ export interface ConfigDiagnostic {
   message: string
 }
 
-export type ManagedWidgetComponent = Component & { dispose?(): void }
+export type WidgetComponent = Component & { dispose?(): void }
 
-export type ManagedWidgetFactory = (tui: TUI, theme: Theme) => ManagedWidgetComponent
+export type WidgetFactory = (tui: TUI, theme: Theme) => WidgetComponent
 
-export type ManagedWidgetContent = string[] | ManagedWidgetFactory
+export type WidgetContent = string[] | WidgetFactory

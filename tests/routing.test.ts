@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { routeWidget } from "../src/layout.ts"
+import { routeWidget } from "../src/routing.ts"
 import type { WidgetLayoutConfig } from "../src/types.ts"
 
 function config(

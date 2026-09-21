@@ -2,28 +2,28 @@ import { Container, Text, type TUI } from "@earendil-works/pi-tui"
 import type { Theme } from "@earendil-works/pi-coding-agent"
 
 import type { WidgetRecord } from "./registry.ts"
-import type { ManagedWidgetComponent, ManagedWidgetContent } from "./types.ts"
+import type { WidgetComponent, WidgetContent } from "./types.ts"
 
 const MAX_WIDGET_LINES = 10
 
 interface CachedWidget {
   revision: number
-  component: ManagedWidgetComponent
+  component: WidgetComponent
 }
 
-export class ManagedWidgetRoot extends Container {
+export class ManagedWidgetHost extends Container {
   private readonly cachedWidgets = new Map<string, CachedWidget>()
   private readonly tui: TUI
   private readonly theme: Theme
 
-  constructor(records: readonly WidgetRecord<ManagedWidgetContent>[], tui: TUI, theme: Theme) {
+  constructor(records: readonly WidgetRecord<WidgetContent>[], tui: TUI, theme: Theme) {
     super()
     this.tui = tui
     this.theme = theme
     this.reconcile(records)
   }
 
-  update(records: readonly WidgetRecord<ManagedWidgetContent>[]): void {
+  update(records: readonly WidgetRecord<WidgetContent>[]): void {
     this.reconcile(records)
     this.tui.requestRender()
   }
@@ -37,9 +37,9 @@ export class ManagedWidgetRoot extends Container {
     this.clear()
   }
 
-  private reconcile(records: readonly WidgetRecord<ManagedWidgetContent>[]): void {
+  private reconcile(records: readonly WidgetRecord<WidgetContent>[]): void {
     const nextWidgets = new Map<string, CachedWidget>()
-    const nextChildren: ManagedWidgetComponent[] = []
+    const nextChildren: WidgetComponent[] = []
 
     for (const record of records) {
       if (record.content === undefined) {
@@ -76,7 +76,7 @@ export class ManagedWidgetRoot extends Container {
     }
   }
 
-  private createComponent(content: ManagedWidgetContent): ManagedWidgetComponent {
+  private createComponent(content: WidgetContent): WidgetComponent {
     if (typeof content === "function") {
       return content(this.tui, this.theme)
     }

@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 
 import { loadWidgetLayoutConfig } from "./config.ts"
-import { WidgetLayoutController } from "./layout-controller.ts"
+import { WidgetLayoutController } from "./controller.ts"
 
 export default function widgetLayoutExtension(pi: ExtensionAPI): void {
   let controller: WidgetLayoutController | undefined

@@ -1,4 +1,4 @@
-import type { ManagedWidgetRoute } from "./layout.ts"
+import type { ManagedWidgetRoute } from "./routing.ts"
 
 interface MutableWidgetRecord<T> {
   key: string
