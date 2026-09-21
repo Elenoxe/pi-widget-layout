@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { WidgetRegistry } from "../src/registry.ts"
+import type { WidgetRecord } from "../src/registry.ts"
 import type { ManagedWidgetRoute } from "../src/layout.ts"
 
 function selectorRoute(index: number, selector = "*"): ManagedWidgetRoute {
@@ -149,5 +150,55 @@ describe("WidgetRegistry", () => {
 
     expect(registry.get("A")).toBeUndefined()
     expect(registry.get("B")?.firstSeen).toBe(0)
+  })
+  test("read results do not expose registry state", () => {
+    const registry = new WidgetRegistry<string>()
+    const route = selectorRoute(0)
+    const setResult = registry.set("A", "a", route)
+    const record = registry.get("A")
+    const records = registry.getActiveRecords()
+
+    if (record === undefined) {
+      throw new Error("expected a registry record")
+    }
+
+    expect(record).not.toBe(setResult)
+    expect(records[0]).not.toBe(record)
+
+    const mutableSetResult = setResult as unknown as {
+      key: string
+      active: boolean
+      content: string | undefined
+      firstSeen: number
+      route: ManagedWidgetRoute
+    }
+    mutableSetResult.key = "changed"
+    mutableSetResult.active = false
+    mutableSetResult.content = "changed"
+    mutableSetResult.firstSeen = 999
+    mutableSetResult.route.bucket.index = 999
+
+    const mutableRecord = record as unknown as {
+      active: boolean
+      content: string | undefined
+      firstSeen: number
+      route: ManagedWidgetRoute
+    }
+    mutableRecord.active = false
+    mutableRecord.content = "changed"
+    mutableRecord.firstSeen = 999
+    mutableRecord.route.bucket.index = 999
+
+    const mutableRecords = records as unknown as WidgetRecord<string>[]
+    mutableRecords.pop()
+
+    expect(registry.get("A")).toEqual({
+      key: "A",
+      content: "a",
+      route,
+      active: true,
+      firstSeen: 0,
+    })
+    expect(registry.getActiveRecords()).toHaveLength(1)
   })
 })

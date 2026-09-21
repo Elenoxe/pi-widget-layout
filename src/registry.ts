@@ -1,6 +1,6 @@
 import type { ManagedWidgetRoute } from "./layout.ts"
 
-export interface WidgetRecord<T> {
+interface MutableWidgetRecord<T> {
   key: string
   content: T | undefined
   route: ManagedWidgetRoute
@@ -8,8 +8,29 @@ export interface WidgetRecord<T> {
   firstSeen: number
 }
 
+export interface WidgetRecord<T> {
+  readonly key: string
+  readonly content: T | undefined
+  readonly route: ManagedWidgetRoute
+  readonly active: boolean
+  readonly firstSeen: number
+}
+
+function snapshotRecord<T>(record: MutableWidgetRecord<T>): WidgetRecord<T> {
+  return {
+    key: record.key,
+    content: record.content,
+    route: {
+      ...record.route,
+      bucket: { ...record.route.bucket },
+    },
+    active: record.active,
+    firstSeen: record.firstSeen,
+  }
+}
+
 export class WidgetRegistry<T> {
-  private readonly records = new Map<string, WidgetRecord<T>>()
+  private readonly records = new Map<string, MutableWidgetRecord<T>>()
 
   private nextFirstSeen = 0
 
@@ -26,17 +47,17 @@ export class WidgetRegistry<T> {
         existing.route = route
         existing.active = false
       }
-      return existing
+      return existing === undefined ? undefined : snapshotRecord(existing)
     }
 
     if (existing !== undefined) {
       existing.content = content
       existing.route = route
       existing.active = true
-      return existing
+      return snapshotRecord(existing)
     }
 
-    const record: WidgetRecord<T> = {
+    const record: MutableWidgetRecord<T> = {
       key,
       content,
       route,
@@ -45,7 +66,7 @@ export class WidgetRegistry<T> {
     }
     this.nextFirstSeen += 1
     this.records.set(key, record)
-    return record
+    return snapshotRecord(record)
   }
 
   clear(key: string): void {
@@ -59,7 +80,8 @@ export class WidgetRegistry<T> {
   }
 
   get(key: string): WidgetRecord<T> | undefined {
-    return this.records.get(key)
+    const record = this.records.get(key)
+    return record === undefined ? undefined : snapshotRecord(record)
   }
 
   getActiveRecords(): readonly WidgetRecord<T>[] {
@@ -69,6 +91,7 @@ export class WidgetRegistry<T> {
         const bucketDifference = left.route.bucket.index - right.route.bucket.index
         return bucketDifference || left.firstSeen - right.firstSeen
       })
+      .map(snapshotRecord)
   }
 
   reset(): void {
