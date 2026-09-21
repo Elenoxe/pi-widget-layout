@@ -10,6 +10,7 @@ function record(
   key: string,
   content: ManagedWidgetContent,
   firstSeen: number,
+  revision = 0,
 ): WidgetRecord<ManagedWidgetContent> {
   return {
     key,
@@ -21,6 +22,7 @@ function record(
     },
     active: true,
     firstSeen,
+    revision,
   }
 }
 
@@ -106,15 +108,21 @@ describe("ManagedWidgetRoot", () => {
     expect(bDisposals).toBe(0)
     expect(renders).toBe(1)
 
-    const replacementA = makeA()
-    root.update([record("a", replacementA, 0), record("b", b, 1)])
+    root.update([record("a", aContent, 0, 1), record("b", b, 1)])
     expect(aCreates).toBe(2)
     expect(aDisposals).toBe(1)
     expect(bCreates).toBe(1)
     expect(bDisposals).toBe(0)
 
-    root.update([record("b", b, 1)])
+    const replacementA = makeA()
+    root.update([record("a", replacementA, 0, 2), record("b", b, 1)])
+    expect(aCreates).toBe(3)
     expect(aDisposals).toBe(2)
+    expect(bCreates).toBe(1)
+    expect(bDisposals).toBe(0)
+
+    root.update([record("b", b, 1)])
+    expect(aDisposals).toBe(3)
     expect(bDisposals).toBe(0)
     expect(root.render(20)).toEqual(["b"])
 

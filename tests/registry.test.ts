@@ -80,7 +80,22 @@ describe("WidgetRegistry", () => {
       route: selectorRoute(1, "new"),
       active: true,
       firstSeen: 0,
+      revision: 1,
     })
+  })
+
+  test("increments revision for every explicit content update", () => {
+    const registry = new WidgetRegistry<string>()
+
+    registry.set("A", "same", selectorRoute(0))
+    expect(registry.get("A")?.revision).toBe(0)
+
+    registry.set("A", "same", selectorRoute(0))
+    expect(registry.get("A")?.revision).toBe(1)
+
+    registry.clear("A")
+    registry.set("A", "same", selectorRoute(0))
+    expect(registry.get("A")?.revision).toBe(2)
   })
 
   test("bucket order dominates firstSeen order", () => {
@@ -170,23 +185,27 @@ describe("WidgetRegistry", () => {
       active: boolean
       content: string | undefined
       firstSeen: number
+      revision: number
       route: ManagedWidgetRoute
     }
     mutableSetResult.key = "changed"
     mutableSetResult.active = false
     mutableSetResult.content = "changed"
     mutableSetResult.firstSeen = 999
+    mutableSetResult.revision = 999
     mutableSetResult.route.bucket.index = 999
 
     const mutableRecord = record as unknown as {
       active: boolean
       content: string | undefined
       firstSeen: number
+      revision: number
       route: ManagedWidgetRoute
     }
     mutableRecord.active = false
     mutableRecord.content = "changed"
     mutableRecord.firstSeen = 999
+    mutableRecord.revision = 999
     mutableRecord.route.bucket.index = 999
 
     const mutableRecords = records as unknown as WidgetRecord<string>[]
@@ -198,6 +217,7 @@ describe("WidgetRegistry", () => {
       route,
       active: true,
       firstSeen: 0,
+      revision: 0,
     })
     expect(registry.getActiveRecords()).toHaveLength(1)
   })

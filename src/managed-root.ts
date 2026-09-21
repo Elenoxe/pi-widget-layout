@@ -7,7 +7,7 @@ import type { ManagedWidgetComponent, ManagedWidgetContent } from "./types.ts"
 const MAX_WIDGET_LINES = 10
 
 interface CachedWidget {
-  content: ManagedWidgetContent
+  revision: number
   component: ManagedWidgetComponent
 }
 
@@ -47,7 +47,7 @@ export class ManagedWidgetRoot extends Container {
       }
 
       const cached = this.cachedWidgets.get(record.key)
-      if (cached !== undefined && cached.content === record.content) {
+      if (cached !== undefined && cached.revision === record.revision) {
         nextWidgets.set(record.key, cached)
         nextChildren.push(cached.component)
         continue
@@ -55,7 +55,7 @@ export class ManagedWidgetRoot extends Container {
 
       cached?.component.dispose?.()
       const component = this.createComponent(record.content)
-      nextWidgets.set(record.key, { content: record.content, component })
+      nextWidgets.set(record.key, { revision: record.revision, component })
       nextChildren.push(component)
     }
 

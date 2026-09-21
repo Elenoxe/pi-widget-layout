@@ -6,6 +6,7 @@ interface MutableWidgetRecord<T> {
   route: ManagedWidgetRoute
   active: boolean
   firstSeen: number
+  revision: number
 }
 
 export interface WidgetRecord<T> {
@@ -14,6 +15,7 @@ export interface WidgetRecord<T> {
   readonly route: ManagedWidgetRoute
   readonly active: boolean
   readonly firstSeen: number
+  readonly revision: number
 }
 
 function snapshotRecord<T>(record: MutableWidgetRecord<T>): WidgetRecord<T> {
@@ -26,6 +28,7 @@ function snapshotRecord<T>(record: MutableWidgetRecord<T>): WidgetRecord<T> {
     },
     active: record.active,
     firstSeen: record.firstSeen,
+    revision: record.revision,
   }
 }
 
@@ -54,6 +57,7 @@ export class WidgetRegistry<T> {
       existing.content = content
       existing.route = route
       existing.active = true
+      existing.revision += 1
       return snapshotRecord(existing)
     }
 
@@ -63,6 +67,7 @@ export class WidgetRegistry<T> {
       route,
       active: true,
       firstSeen: this.nextFirstSeen,
+      revision: 0,
     }
     this.nextFirstSeen += 1
     this.records.set(key, record)

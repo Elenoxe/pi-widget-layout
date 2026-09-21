@@ -112,31 +112,37 @@ describe("widget layout integration", () => {
     expect(disposals).toBe(0)
     expect(renderRoot(harness)).toEqual([" alpha", " custom"])
 
+    harness.setWidget("beta", custom)
+    expect(harness.rootMounts).toBe(1)
+    expect(creates).toBe(2)
+    expect(disposals).toBe(1)
+    expect(renderRoot(harness)).toEqual([" alpha", " custom"])
+
     harness.setWidget("alpha", ["alpha-updated"])
     expect(harness.rootMounts).toBe(1)
-    expect(creates).toBe(1)
-    expect(disposals).toBe(0)
+    expect(creates).toBe(2)
+    expect(disposals).toBe(1)
     expect(renderRoot(harness)).toEqual([" alpha-updated", " custom"])
 
     harness.setWidget("alpha", undefined)
     expect(harness.rootMounts).toBe(1)
-    expect(creates).toBe(1)
-    expect(disposals).toBe(0)
+    expect(creates).toBe(2)
+    expect(disposals).toBe(1)
     expect(renderRoot(harness)).toEqual([" custom"])
 
     harness.setWidget("beta", undefined)
     expect(harness.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
     expect(harness.rootMounts).toBe(1)
-    expect(disposals).toBe(1)
+    expect(disposals).toBe(2)
 
     harness.setWidget("beta", custom)
     expect(harness.rootMounts).toBe(2)
-    expect(creates).toBe(2)
-    expect(disposals).toBe(1)
+    expect(creates).toBe(3)
+    expect(disposals).toBe(2)
 
     controller.dispose()
     expect(harness.widgets.has(MANAGED_WIDGET_KEY)).toBe(false)
-    expect(disposals).toBe(2)
+    expect(disposals).toBe(3)
   })
 
   test("resolves exact, wildcard, and catch-all selectors with stable slots", () => {
