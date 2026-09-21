@@ -4,15 +4,14 @@ import { compileOrder } from "./matcher.ts"
 import { ManagedWidgetRoot } from "./managed-root.ts"
 import { routeWidget } from "./layout.ts"
 import { WidgetRegistry } from "./registry.ts"
-import type { ManagedWidgetContent, WidgetLayoutConfig } from "./types.ts"
+import type { ManagedWidgetContent, ManagedWidgetFactory, WidgetLayoutConfig } from "./types.ts"
 
 export const MANAGED_WIDGET_KEY = "pi-widget-layout:managed-root"
 
-export type WidgetSetHandler = (
-  key: string,
-  content: ManagedWidgetContent | undefined,
-  options?: ExtensionWidgetOptions,
-) => void
+export interface WidgetSetHandler {
+  (key: string, content: string[] | undefined, options?: ExtensionWidgetOptions): void
+  (key: string, content: ManagedWidgetFactory | undefined, options?: ExtensionWidgetOptions): void
+}
 
 export interface WidgetLayoutUI {
   setWidget: WidgetSetHandler
@@ -20,6 +19,7 @@ export interface WidgetLayoutUI {
 
 export class WidgetLayoutController {
   private readonly originalSetWidget: WidgetSetHandler
+  private readonly boundOriginalSetWidget: WidgetSetHandler
   private readonly interceptedSetWidget: WidgetSetHandler
   private readonly compiledOrder
   private readonly registry = new WidgetRegistry<ManagedWidgetContent>()
@@ -31,6 +31,7 @@ export class WidgetLayoutController {
     private readonly config: WidgetLayoutConfig,
   ) {
     this.originalSetWidget = ui.setWidget
+    this.boundOriginalSetWidget = ui.setWidget.bind(ui)
     this.interceptedSetWidget = (key, content, options) => {
       this.handleSetWidget(key, content, options)
     }
@@ -87,7 +88,12 @@ export class WidgetLayoutController {
     content: ManagedWidgetContent | undefined,
     options?: ExtensionWidgetOptions,
   ): void {
-    this.originalSetWidget.call(this.ui, key, content, options)
+    if (typeof content === "function") {
+      this.boundOriginalSetWidget(key, content, options)
+      return
+    }
+
+    this.boundOriginalSetWidget(key, content, options)
   }
   private refreshManagedRoot(): void {
     const records = this.registry.getActiveRecords()
