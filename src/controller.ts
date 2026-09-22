@@ -3,7 +3,6 @@ import type { ExtensionWidgetOptions } from "@earendil-works/pi-coding-agent"
 import { compileOrder, type CompiledOrder } from "./matcher.ts"
 import { ManagedWidgetHost } from "./widget-host.ts"
 import { routeWidget } from "./routing.ts"
-import type { WidgetRoute } from "./routing.ts"
 import { WidgetRegistry } from "./registry.ts"
 import type {
   WidgetContent,
@@ -11,7 +10,7 @@ import type {
   WidgetLayoutConfig,
   WidgetLayoutSnapshot,
   WidgetPlacement,
-  WidgetResolution,
+  WidgetSnapshot,
 } from "./types.ts"
 
 export const HOST_WIDGET_KEYS = {
@@ -25,13 +24,14 @@ interface SectionState {
   compiledOrder: CompiledOrder
   registry: WidgetRegistry<WidgetContent>
   observations: Map<string, ObservedWidget>
+  layout: Set<string>
   host?: ManagedWidgetHost
 }
 
 interface ObservedWidget {
   key: string
   active: boolean
-  resolution: WidgetResolution
+  lastSeen: number
 }
 
 export interface WidgetSetHandler {
@@ -49,6 +49,8 @@ export class WidgetLayoutController {
   private readonly wrappedSetWidget: WidgetSetHandler
   private readonly sections: Record<WidgetPlacement, SectionState>
   private installed = false
+  private lastSeen = 0
+  private readonly owners = new Map<string, WidgetPlacement>()
 
   constructor(
     private readonly ui: WidgetLayoutUI,
@@ -68,11 +70,13 @@ export class WidgetLayoutController {
         compiledOrder: compileOrder(config.aboveEditor.order),
         registry: new WidgetRegistry(),
         observations: new Map(),
+        layout: new Set(),
       },
       belowEditor: {
         compiledOrder: compileOrder(config.belowEditor.order),
         registry: new WidgetRegistry(),
         observations: new Map(),
+        layout: new Set(),
       },
     }
   }
@@ -92,23 +96,49 @@ export class WidgetLayoutController {
       }
       section.observations.clear()
       section.registry.reset()
+      section.layout.clear()
     }
     if (this.ui.setWidget === this.wrappedSetWidget) {
       this.ui.setWidget = this.previousSetWidget
     }
     this.installed = false
+    this.owners.clear()
   }
 
   getSnapshot(): WidgetLayoutSnapshot {
     return {
-      sections: PLACEMENTS.map((placement) => ({
-        placement,
-        unlisted: this.config[placement].unlisted,
-        order: [...this.config[placement].order],
-        widgets: [...this.sections[placement].observations.values()]
-          .filter((widget) => widget.active)
-          .map(({ key, resolution }) => ({ key, resolution: { ...resolution } })),
-      })),
+      sections: PLACEMENTS.map((placement) => {
+        const section = this.sections[placement]
+        const managed: WidgetSnapshot[] = section.registry
+          .getRecords()
+          .filter(({ key }) => this.owners.get(key) === placement && !section.observations.has(key))
+          .map(({ key, active, route }) => ({
+            key,
+            active,
+            resolution:
+              route.bucket.kind === "selector"
+                ? { kind: "selector", selector: route.bucket.selector }
+                : { kind: "system", value: route.bucket.position },
+          }))
+        const widgets: WidgetSnapshot[] = []
+        for (const key of section.layout) {
+          if (key === HOST_WIDGET_KEYS[placement]) {
+            widgets.push(...managed)
+          } else {
+            widgets.push({ key, active: true, resolution: { kind: "system", value: "native" } })
+          }
+        }
+        return {
+          placement,
+          unlisted: this.config[placement].unlisted,
+          order: [...this.config[placement].order],
+          widgets,
+          detached: [...section.observations.values()]
+            .filter((widget) => !widget.active)
+            .sort((a, b) => b.lastSeen - a.lastSeen)
+            .map(({ key, lastSeen }) => ({ key, lastSeen })),
+        }
+      }),
     }
   }
 
@@ -119,7 +149,7 @@ export class WidgetLayoutController {
   ): void {
     if (content === undefined) {
       // Pi clears a key in both regions, regardless of the supplied placement.
-      for (const placement of PLACEMENTS) this.clearWidget(placement, key)
+      for (const placement of PLACEMENTS) this.clearWidget(placement, key, true)
       this.forwardToPreviousSetWidget(key, undefined, options)
       return
     }
@@ -127,40 +157,34 @@ export class WidgetLayoutController {
     const placement = options?.placement ?? "aboveEditor"
     const otherPlacement = placement === "aboveEditor" ? "belowEditor" : "aboveEditor"
     this.clearWidget(otherPlacement, key)
+    this.sections[otherPlacement].observations.delete(key)
+    this.owners.set(key, placement)
 
     const section = this.sections[placement]
     const route = routeWidget(key, placement, this.config, section.compiledOrder)
     if (route.kind === "managed") {
+      section.observations.delete(key)
       this.forwardToPreviousSetWidget(key, undefined, options)
       section.registry.set(key, content, route)
       this.syncHost(placement)
     } else {
       this.clearWidget(placement, key)
       this.forwardToPreviousSetWidget(key, content, options)
+      section.observations.set(key, { key, active: true, lastSeen: ++this.lastSeen })
     }
-    this.updateObservation(key, route)
   }
 
-  private clearWidget(placement: WidgetPlacement, key: string): void {
+  private clearWidget(placement: WidgetPlacement, key: string, explicit = false): void {
     const section = this.sections[placement]
     const observed = section.observations.get(key)
-    if (observed !== undefined) observed.active = false
+    if (observed !== undefined && (observed.active || explicit)) {
+      observed.active = false
+      observed.lastSeen = ++this.lastSeen
+    }
     if (section.registry.get(key)?.active) {
       section.registry.clear(key)
       this.syncHost(placement)
     }
-  }
-
-  private updateObservation(key: string, route: WidgetRoute): void {
-    const observations = this.sections[route.placement].observations
-    const resolution: WidgetResolution =
-      route.kind === "managed"
-        ? route.bucket.kind === "selector"
-          ? { kind: "selector", selector: route.bucket.selector }
-          : { kind: "system", value: route.bucket.position }
-        : { kind: "system", value: "native" }
-    // Updating an existing Map entry preserves its first-seen slot in this region.
-    observations.set(key, { key, active: true, resolution })
   }
 
   private forwardToPreviousSetWidget(
@@ -170,9 +194,19 @@ export class WidgetLayoutController {
   ): void {
     if (typeof content === "function") {
       this.callPreviousSetWidget(key, content, options)
-      return
+    } else {
+      this.callPreviousSetWidget(key, content, options)
     }
-    this.callPreviousSetWidget(key, content, options)
+    // Pi deletes from both maps before inserting, including on native updates.
+    // An absent host keeps only its logical history slot until it mounts again.
+    for (const placement of PLACEMENTS) {
+      if (content !== undefined || key !== HOST_WIDGET_KEYS[placement]) {
+        this.sections[placement].layout.delete(key)
+      }
+    }
+    if (content !== undefined) {
+      this.sections[options?.placement ?? "aboveEditor"].layout.add(key)
+    }
   }
 
   private syncHost(placement: WidgetPlacement): void {

@@ -33,6 +33,7 @@ export interface StatusEntryData {
 export interface StatusLine {
   readonly text: string
   readonly collapsible: boolean
+  readonly color: "accent" | "muted" | "dim"
 }
 
 export function formatResolution(resolution: WidgetResolution): string {
@@ -52,17 +53,17 @@ export function formatStatusSection(
     {
       text: `${section.placement}  unlisted=[${section.unlisted}]`,
       collapsible: false,
+      color: "accent",
     },
     {
       text: `  order: ${section.order.length === 0 ? "—" : section.order.join(" > ")}`,
       collapsible: false,
+      color: "muted",
     },
-    { text: "", collapsible: false },
   ]
 
   if (section.widgets.length === 0) {
-    lines.push({ text: "  widgets: —", collapsible: false })
-    return lines
+    lines.push({ text: "  widgets: —", collapsible: false, color: "dim" })
   }
 
   const keyWidth = Math.min(
@@ -72,26 +73,25 @@ export function formatStatusSection(
   for (const widget of section.widgets) {
     const padding = Math.max(0, keyWidth - visibleWidth(widget.key))
     lines.push({
-      text: `  ${widget.key}${" ".repeat(padding)} → ${formatResolution(widget.resolution)}`,
+      text: `  ${widget.active ? "●" : "○"} ${widget.key}${" ".repeat(padding)} → ${formatResolution(widget.resolution)}`,
       collapsible: true,
+      color: widget.active ? "muted" : "dim",
     })
+  }
+  if (section.detached.length > 0) {
+    lines.push({ text: "  detached:", collapsible: false, color: "accent" })
+    for (const widget of section.detached) {
+      lines.push({ text: `    ○ ${widget.key}`, collapsible: true, color: "dim" })
+    }
   }
   return lines
 }
 
 export function formatStatus(snapshot: WidgetLayoutSnapshot, config: StatusConfig): StatusLine[] {
-  const lines: StatusLine[] = [
-    { text: "widget-layout", collapsible: false },
-    { text: "", collapsible: false },
-  ]
-
-  snapshot.sections.forEach((section, index) => {
-    if (index > 0) {
-      lines.push({ text: "", collapsible: false })
-    }
+  const lines: StatusLine[] = [{ text: "widget-layout", collapsible: false, color: "accent" }]
+  for (const section of snapshot.sections) {
     lines.push(...formatStatusSection(section, config))
-  })
-
+  }
   return lines
 }
 
@@ -120,7 +120,7 @@ function buildCollapsedLines(
 
   const hiddenWidgetCount = totalWidgetCount - visibleWidgetCount
   if (hiddenWidgetCount > 0) {
-    result.push({ text: `  … ${hiddenWidgetCount} more`, collapsible: false })
+    result.push({ text: `  … ${hiddenWidgetCount} more`, collapsible: false, color: "dim" })
   }
   return result
 }
@@ -173,9 +173,7 @@ export class WidgetLayoutStatusComponent implements Component {
   invalidate(): void {}
 
   private renderStyled(lines: readonly StatusLine[], width: number): string[] {
-    const text = lines
-      .map((line, index) => (index === 0 ? this.theme.fg("accent", line.text) : line.text))
-      .join("\n")
+    const text = lines.map((line) => this.theme.fg(line.color, line.text)).join("\n")
     return new Text(text, 1, 0).render(Math.max(1, width))
   }
 }

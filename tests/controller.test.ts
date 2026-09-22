@@ -7,6 +7,7 @@ import { HOST_WIDGET_KEYS, WidgetLayoutController, type WidgetLayoutUI } from ".
 import type { WidgetContent, WidgetFactory } from "../src/types.ts"
 import type { WidgetPlacement } from "../src/types.ts"
 import { createDefaultConfig } from "../src/config.ts"
+import { formatStatus } from "../src/commands/status.ts"
 
 const HOST_WIDGET_KEY = HOST_WIDGET_KEYS.aboveEditor
 
@@ -92,7 +93,7 @@ describe("WidgetLayoutController", () => {
     expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
   })
 
-  test("snapshots above-editor observations in first-seen order", () => {
+  test("snapshots physical order after host remount and global placement moves", () => {
     const ui = new FakeUi()
     const controller = new WidgetLayoutController(ui, config())
     controller.install()
@@ -111,14 +112,15 @@ describe("WidgetLayoutController", () => {
           placement: "aboveEditor",
           unlisted: "native",
           order: ["managed", "managed-2"],
+          detached: [],
           widgets: [
-            { key: "managed", resolution: { kind: "selector", selector: "managed" } },
-            { key: "unlisted", resolution: { kind: "system", value: "native" } },
-            { key: "later", resolution: { kind: "system", value: "native" } },
-            { key: "below", resolution: { kind: "system", value: "native" } },
+            { key: "unlisted", active: true, resolution: { kind: "system", value: "native" } },
+            { key: "later", active: true, resolution: { kind: "system", value: "native" } },
+            { key: "managed", active: true, resolution: { kind: "selector", selector: "managed" } },
+            { key: "below", active: true, resolution: { kind: "system", value: "native" } },
           ],
         },
-        { placement: "belowEditor", unlisted: "native", order: [], widgets: [] },
+        { placement: "belowEditor", unlisted: "native", order: [], widgets: [], detached: [] },
       ],
     })
 
@@ -143,10 +145,10 @@ describe("WidgetLayoutController", () => {
     belowUi.setWidget("unlisted", ["below"])
 
     expect(aboveController.getSnapshot().sections[0]?.widgets).toEqual([
-      { key: "unlisted", resolution: { kind: "system", value: "above" } },
+      { key: "unlisted", active: true, resolution: { kind: "system", value: "above" } },
     ])
     expect(belowController.getSnapshot().sections[0]?.widgets).toEqual([
-      { key: "unlisted", resolution: { kind: "system", value: "below" } },
+      { key: "unlisted", active: true, resolution: { kind: "system", value: "below" } },
     ])
   })
   test("moves a widget from native ownership to managed ownership", () => {
@@ -230,5 +232,70 @@ describe("WidgetLayoutController", () => {
 
     ui.setWidget("managed", ["native"], { placement: "belowEditor" })
     expect(ui.widgets.get("managed")).toMatchObject({ placement: "belowEditor" })
+  })
+  test("preserves logical slots, tracks physical updates, and detaches globally unique native keys", () => {
+    const ui = new FakeUi()
+    const settings = {
+      ...config(),
+      belowEditor: { unlisted: "native" as const, order: ["managed", "managed-2"] },
+    }
+    const controller = new WidgetLayoutController(ui, settings)
+    controller.install()
+    const above = () => controller.getSnapshot().sections[0]!
+    const keys = () => above().widgets.map((widget) => widget.key)
+    const assertUnique = () => {
+      const all = controller
+        .getSnapshot()
+        .sections.flatMap((section) =>
+          [...section.widgets, ...section.detached].map((widget) => widget.key),
+        )
+      expect(new Set(all).size).toBe(all.length)
+    }
+    ui.setWidget("unknown", undefined)
+    expect(above().detached).toEqual([])
+    ui.setWidget("before", ["before"])
+    ui.setWidget("managed-2", ["second"])
+    ui.setWidget("managed", ["first"])
+    ui.setWidget("after", ["after"])
+    expect(keys()).toEqual(["before", "managed", "managed-2", "after"])
+    ui.setWidget("managed", undefined)
+    expect(above().widgets[1]?.active).toBe(false)
+    ui.setWidget("managed-2", undefined)
+    expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
+    expect(keys()).toEqual(["before", "managed", "managed-2", "after"])
+    ui.setWidget("before", ["updated"])
+    expect(keys()).toEqual(["managed", "managed-2", "after", "before"])
+    ui.setWidget("managed", ["remounted"])
+    expect(keys()).toEqual(["after", "before", "managed", "managed-2"])
+    ui.setWidget("before", undefined)
+    ui.setWidget("after", undefined)
+    expect(above().detached.map((widget) => widget.key)).toEqual(["after", "before"])
+    ui.setWidget("before", undefined)
+    expect(above().detached.map((widget) => widget.key)).toEqual(["before", "after"])
+    const lines = formatStatus(controller.getSnapshot(), settings.status)
+    expect(lines.every((line) => line.text.trim().length > 0)).toBe(true)
+    expect(lines.some((line) => line.text === "unmanaged")).toBe(false)
+    expect(lines.find((line) => line.text === "    ○ before")?.color).toBe("dim")
+    expect(
+      lines.filter((line) => line.text.includes("detached:")).map((line) => line.text),
+    ).toEqual(["  detached:"])
+    ui.setWidget("managed", ["below"], { placement: "belowEditor" })
+    expect(keys()).toEqual(["managed-2"])
+    assertUnique()
+    ui.setWidget("managed", undefined)
+    expect(controller.getSnapshot().sections[1]?.widgets[0]?.active).toBe(false)
+    ui.setWidget("before", ["below"], { placement: "belowEditor" })
+    expect(above().detached.map((widget) => widget.key)).toEqual(["after"])
+    ui.setWidget("before", undefined)
+    assertUnique()
+    expect(controller.getSnapshot().sections[1]?.detached.map((widget) => widget.key)).toEqual([
+      "before",
+    ])
+    controller.dispose()
+    expect(
+      controller
+        .getSnapshot()
+        .sections.every((section) => section.widgets.length === 0 && section.detached.length === 0),
+    ).toBe(true)
   })
 })

@@ -26,6 +26,7 @@ export type WidgetResolution =
 
 export interface WidgetSnapshot {
   readonly key: string
+  readonly active: boolean
   readonly resolution: WidgetResolution
 }
 
@@ -34,6 +35,7 @@ export interface WidgetLayoutSectionSnapshot {
   readonly unlisted: UnlistedPolicy
   readonly order: readonly string[]
   readonly widgets: readonly WidgetSnapshot[]
+  readonly detached: readonly { readonly key: string; readonly lastSeen: number }[]
 }
 
 export interface WidgetLayoutSnapshot {

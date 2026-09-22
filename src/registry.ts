@@ -90,8 +90,11 @@ export class WidgetRegistry<T> {
   }
 
   getActiveRecords(): readonly WidgetRecord<T>[] {
+    return this.getRecords().filter((record) => record.active)
+  }
+
+  getRecords(): readonly WidgetRecord<T>[] {
     return [...this.records.values()]
-      .filter((record) => record.active)
       .sort((left, right) => {
         const bucketDifference = left.route.bucket.index - right.route.bucket.index
         return bucketDifference || left.firstSeen - right.firstSeen

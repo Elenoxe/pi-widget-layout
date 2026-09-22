@@ -345,7 +345,7 @@ describe("widget layout integration", () => {
       expect(harness.widgets.get("moving")?.placement).toBe(placement)
       expect(
         controller.getSnapshot().sections.find((s) => s.placement === placement)?.widgets,
-      ).toEqual([{ key: "moving", resolution: { kind: "system", value: "native" } }])
+      ).toEqual([{ key: "moving", active: true, resolution: { kind: "system", value: "native" } }])
       controller.dispose()
       expect(disposed).toBe(2)
       expect(harness.widgets.has("moving")).toBe(true)
@@ -379,7 +379,11 @@ describe("widget layout integration", () => {
         expect(harness.widgets.get(HOST_WIDGET_KEYS[placement])?.placement).toBe(placement)
         expect(
           controller.getSnapshot().sections.find((s) => s.placement === placement)?.widgets,
-        ).toContainEqual({ key: "unlisted-a", resolution: { kind: "system", value: position } })
+        ).toContainEqual({
+          key: "unlisted-a",
+          active: true,
+          resolution: { kind: "system", value: position },
+        })
         controller.dispose()
       },
     )

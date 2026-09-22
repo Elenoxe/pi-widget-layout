@@ -30,8 +30,10 @@ function snapshot(widgetCount = 0): WidgetLayoutSnapshot {
         placement: "aboveEditor",
         unlisted: "native",
         order: ["native", "group-*", "*"],
+        detached: [],
         widgets: Array.from({ length: widgetCount }, (_, index) => ({
           key: `widget-${index}`,
+          active: true,
           resolution: {
             kind: "selector" as const,
             selector: index % 2 === 0 ? "group-*" : "*",
@@ -73,9 +75,13 @@ describe("status formatter", () => {
           {
             ...snapshot().sections[0]!,
             widgets: [
-              { key: "foo", resolution: { kind: "selector", selector: "native" } },
-              { key: "group-a", resolution: { kind: "selector", selector: "group-*" } },
-              { key: "notes", resolution: { kind: "system", value: "native" } },
+              { key: "foo", active: false, resolution: { kind: "selector", selector: "native" } },
+              {
+                key: "group-a",
+                active: true,
+                resolution: { kind: "selector", selector: "group-*" },
+              },
+              { key: "notes", active: true, resolution: { kind: "system", value: "native" } },
             ],
           },
         ],
@@ -85,30 +91,33 @@ describe("status formatter", () => {
 
     expect(lines.map((line) => line.text)).toEqual([
       "widget-layout",
-      "",
       "aboveEditor  unlisted=[native]",
       "  order: native > group-* > *",
-      "",
-      "  foo     → native",
-      "  group-a → group-*",
-      "  notes   → [native]",
+      "  ○ foo     → native",
+      "  ● group-a → group-*",
+      "  ● notes   → [native]",
     ])
-    expect(lines.slice(5).every((line) => line.collapsible)).toBe(true)
+    expect(lines.slice(3).every((line) => line.collapsible)).toBe(true)
+    expect(lines.map((line) => line.color)).toEqual([
+      "accent",
+      "accent",
+      "muted",
+      "dim",
+      "muted",
+      "muted",
+    ])
   })
 
   test("uses fixed empty-state lines", () => {
     expect(formatStatus(snapshot(), statusConfig()).map((line) => line.text)).toEqual([
       "widget-layout",
-      "",
       "aboveEditor  unlisted=[native]",
       "  order: native > group-* > *",
-      "",
       "  widgets: —",
     ])
 
     expect(formatStatus({ sections: [] }, statusConfig()).map((line) => line.text)).toEqual([
       "widget-layout",
-      "",
     ])
   })
 
@@ -120,20 +129,21 @@ describe("status formatter", () => {
           widgets: [
             {
               key: "x".repeat(30),
+              active: true,
               resolution: { kind: "system", value: "native" },
             },
-            { key: "foo", resolution: { kind: "system", value: "above" } },
+            { key: "foo", active: true, resolution: { kind: "system", value: "above" } },
           ],
         },
       ],
     }
     const narrow = formatStatus(keyedSnapshot, statusConfig({ keyColumnMaxWidth: 8 }))
     const wide = formatStatus(keyedSnapshot, statusConfig({ keyColumnMaxWidth: 24 }))
-    const narrowFoo = narrow.find((line) => line.text.startsWith("  foo"))?.text
-    const wideFoo = wide.find((line) => line.text.startsWith("  foo"))?.text
+    const narrowFoo = narrow.find((line) => line.text.startsWith("  ● foo"))?.text
+    const wideFoo = wide.find((line) => line.text.startsWith("  ● foo"))?.text
 
-    expect(narrowFoo?.indexOf("→")).toBe(11)
-    expect(wideFoo?.indexOf("→")).toBe(27)
+    expect(narrowFoo?.indexOf("→")).toBe(13)
+    expect(wideFoo?.indexOf("→")).toBe(29)
   })
 })
 
@@ -220,6 +230,7 @@ describe("WidgetLayoutStatusComponent", () => {
               widgets: [
                 {
                   key: "some-extremely-long-widget-name-that-is-not-truncated",
+                  active: true,
                   resolution: { kind: "system", value: "native" },
                 },
               ],
@@ -253,8 +264,10 @@ describe("WidgetLayoutStatusComponent", () => {
         placement,
         unlisted: "native" as const,
         order: ["*"],
+        detached: [],
         widgets: Array.from({ length: 8 }, (_, i) => ({
           key: `${placement}-${i}-long-widget`,
+          active: true,
           resolution: { kind: "selector" as const, selector: "*" },
         })),
       }))
