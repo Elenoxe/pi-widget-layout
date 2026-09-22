@@ -90,7 +90,7 @@ describe("status formatter", () => {
     )
 
     expect(lines.map((line) => line.text)).toEqual([
-      "widget-layout",
+      "widget layout status",
       "aboveEditor  unlisted=[native]",
       "  order: native > group-* > *",
       "  ○ foo     → native",
@@ -243,7 +243,7 @@ describe("WidgetLayoutStatusComponent", () => {
       theme,
     )
 
-    expect(component.render(80)[0]?.trim()).toBe("widget-layout")
+    expect(component.render(80)[0]?.trim()).toBe("widget layout status")
   })
 
   test.each([80, 24])(

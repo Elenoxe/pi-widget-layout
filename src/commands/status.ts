@@ -82,7 +82,7 @@ export function formatStatusSection(
 }
 
 export function formatStatus(snapshot: WidgetLayoutSnapshot, config: StatusConfig): StatusLine[] {
-  const lines: StatusLine[] = [{ text: "widget-layout", collapsible: false }]
+  const lines: StatusLine[] = [{ text: "widget layout status", collapsible: false }]
   for (const section of snapshot.sections) {
     lines.push(...formatStatusSection(section, config))
   }
