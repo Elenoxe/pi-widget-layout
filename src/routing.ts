@@ -18,7 +18,7 @@ export type ManagedBucket = SelectorBucket | UnlistedBucket
 
 export interface ManagedWidgetRoute {
   kind: "managed"
-  placement: "aboveEditor"
+  placement: WidgetPlacement
   bucket: ManagedBucket
 }
 
@@ -35,16 +35,13 @@ export function routeWidget(
   config: WidgetLayoutConfig,
   compiledOrder?: CompiledOrder,
 ): WidgetRoute {
-  if (requestedPlacement === "belowEditor") {
-    return { kind: "native", placement: "belowEditor" }
-  }
-
-  const order = compiledOrder ?? compileOrder(config.aboveEditor.order)
+  const section = config[requestedPlacement]
+  const order = compiledOrder ?? compileOrder(section.order)
   const match = matchWidget(key, order)
   if (match !== undefined) {
     return {
       kind: "managed",
-      placement: "aboveEditor",
+      placement: requestedPlacement,
       bucket: {
         kind: "selector",
         selector: match.selector,
@@ -53,18 +50,18 @@ export function routeWidget(
     }
   }
 
-  const position = config.aboveEditor.unlisted
+  const position = section.unlisted
   if (position !== "native") {
     return {
       kind: "managed",
-      placement: "aboveEditor",
+      placement: requestedPlacement,
       bucket: {
         kind: "unlisted",
         position,
-        index: position === "above" ? -1 : config.aboveEditor.order.length,
+        index: position === "above" ? -1 : section.order.length,
       },
     }
   }
 
-  return { kind: "native", placement: "aboveEditor" }
+  return { kind: "native", placement: requestedPlacement }
 }

@@ -157,6 +157,7 @@ export class WidgetLayoutStatusComponent implements Component {
       }
     }
 
+    // Keep section headers/configuration and the summary even when they exceed the budget.
     return this.renderStyled(buildCollapsedLines(this.lines, 0), width)
   }
 

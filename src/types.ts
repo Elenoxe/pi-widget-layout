@@ -18,6 +18,7 @@ export interface WidgetSectionConfig {
 export interface WidgetLayoutConfig {
   status: StatusConfig
   aboveEditor: WidgetSectionConfig
+  belowEditor: WidgetSectionConfig
 }
 
 export type WidgetResolution =

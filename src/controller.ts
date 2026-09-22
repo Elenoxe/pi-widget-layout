@@ -14,22 +14,26 @@ import type {
   WidgetResolution,
 } from "./types.ts"
 
-export const HOST_WIDGET_KEY = "pi-widget-layout:host"
+export const HOST_WIDGET_KEYS = {
+  aboveEditor: "pi-widget-layout:host:aboveEditor",
+  belowEditor: "pi-widget-layout:host:belowEditor",
+} as const
+
+const PLACEMENTS = ["aboveEditor", "belowEditor"] as const
 
 interface SectionState {
   compiledOrder: CompiledOrder
   registry: WidgetRegistry<WidgetContent>
   observations: Map<string, ObservedWidget>
-  nextObserved: number
   host?: ManagedWidgetHost
 }
 
 interface ObservedWidget {
   key: string
-  firstObserved: number
   active: boolean
   resolution: WidgetResolution
 }
+
 export interface WidgetSetHandler {
   (key: string, content: string[] | undefined, options?: ExtensionWidgetOptions): void
   (key: string, content: WidgetFactory | undefined, options?: ExtensionWidgetOptions): void
@@ -43,7 +47,7 @@ export class WidgetLayoutController {
   private readonly previousSetWidget: WidgetSetHandler
   private readonly callPreviousSetWidget: WidgetSetHandler
   private readonly wrappedSetWidget: WidgetSetHandler
-  private readonly sections: Record<"aboveEditor", SectionState>
+  private readonly sections: Record<WidgetPlacement, SectionState>
   private installed = false
 
   constructor(
@@ -57,7 +61,6 @@ export class WidgetLayoutController {
         this.forwardToPreviousSetWidget(key, content, options)
         return
       }
-
       this.handleSetWidget(key, content, options)
     }
     this.sections = {
@@ -65,31 +68,31 @@ export class WidgetLayoutController {
         compiledOrder: compileOrder(config.aboveEditor.order),
         registry: new WidgetRegistry(),
         observations: new Map(),
-        nextObserved: 0,
+      },
+      belowEditor: {
+        compiledOrder: compileOrder(config.belowEditor.order),
+        registry: new WidgetRegistry(),
+        observations: new Map(),
       },
     }
   }
 
   install(): void {
-    if (this.installed) {
-      return
-    }
-
+    if (this.installed) return
     this.ui.setWidget = this.wrappedSetWidget
     this.installed = true
   }
 
   dispose(): void {
-    const section = this.sections.aboveEditor
-    const host = section.host
-    section.host = undefined
-    if (host !== undefined) {
-      this.forwardToPreviousSetWidget(HOST_WIDGET_KEY, undefined)
+    for (const placement of PLACEMENTS) {
+      const section = this.sections[placement]
+      if (section.host !== undefined) {
+        section.host = undefined
+        this.forwardToPreviousSetWidget(HOST_WIDGET_KEYS[placement], undefined)
+      }
+      section.observations.clear()
+      section.registry.reset()
     }
-
-    section.observations.clear()
-    section.nextObserved = 0
-    section.registry.reset()
     if (this.ui.setWidget === this.wrappedSetWidget) {
       this.ui.setWidget = this.previousSetWidget
     }
@@ -97,90 +100,67 @@ export class WidgetLayoutController {
   }
 
   getSnapshot(): WidgetLayoutSnapshot {
-    const widgets = [...this.sections.aboveEditor.observations.values()]
-      .filter((widget) => widget.active)
-      .sort((left, right) => left.firstObserved - right.firstObserved)
-      .map(({ key, resolution }) => ({
-        key,
-        resolution: { ...resolution },
-      }))
-
     return {
-      sections: [
-        {
-          placement: "aboveEditor",
-          unlisted: this.config.aboveEditor.unlisted,
-          order: [...this.config.aboveEditor.order],
-          widgets,
-        },
-      ],
+      sections: PLACEMENTS.map((placement) => ({
+        placement,
+        unlisted: this.config[placement].unlisted,
+        order: [...this.config[placement].order],
+        widgets: [...this.sections[placement].observations.values()]
+          .filter((widget) => widget.active)
+          .map(({ key, resolution }) => ({ key, resolution: { ...resolution } })),
+      })),
     }
   }
+
   private handleSetWidget(
     key: string,
     content: WidgetContent | undefined,
     options?: ExtensionWidgetOptions,
   ): void {
-    const requestedPlacement = options?.placement ?? "aboveEditor"
-    const section = this.sections.aboveEditor
-    const route = routeWidget(key, requestedPlacement, this.config, section.compiledOrder)
+    if (content === undefined) {
+      // Pi clears a key in both regions, regardless of the supplied placement.
+      for (const placement of PLACEMENTS) this.clearWidget(placement, key)
+      this.forwardToPreviousSetWidget(key, undefined, options)
+      return
+    }
 
-    this.updateObservation(key, content, requestedPlacement, route)
+    const placement = options?.placement ?? "aboveEditor"
+    const otherPlacement = placement === "aboveEditor" ? "belowEditor" : "aboveEditor"
+    this.clearWidget(otherPlacement, key)
+
+    const section = this.sections[placement]
+    const route = routeWidget(key, placement, this.config, section.compiledOrder)
     if (route.kind === "managed") {
       this.forwardToPreviousSetWidget(key, undefined, options)
-      if (content === undefined) {
-        section.registry.set(key, undefined, route)
-      } else {
-        section.registry.set(key, content, route)
-      }
-      this.syncHost("aboveEditor")
-      return
+      section.registry.set(key, content, route)
+      this.syncHost(placement)
+    } else {
+      this.clearWidget(placement, key)
+      this.forwardToPreviousSetWidget(key, content, options)
     }
-
-    section.registry.clear(key)
-    this.syncHost("aboveEditor")
-    const nativeOptions =
-      route.placement === requestedPlacement ? options : { ...options, placement: route.placement }
-    this.forwardToPreviousSetWidget(key, content, nativeOptions)
+    this.updateObservation(key, route)
   }
 
-  private updateObservation(
-    key: string,
-    content: WidgetContent | undefined,
-    requestedPlacement: WidgetPlacement,
-    route: WidgetRoute,
-  ): void {
-    const section = this.sections.aboveEditor
+  private clearWidget(placement: WidgetPlacement, key: string): void {
+    const section = this.sections[placement]
     const observed = section.observations.get(key)
-    if (content === undefined) {
-      if (observed !== undefined) {
-        observed.active = false
-      }
-      return
+    if (observed !== undefined) observed.active = false
+    if (section.registry.get(key)?.active) {
+      section.registry.clear(key)
+      this.syncHost(placement)
     }
+  }
 
-    const current = observed ?? {
-      key,
-      firstObserved: section.nextObserved++,
-      active: false,
-      resolution: { kind: "system", value: "native" } as WidgetResolution,
-    }
-    section.observations.set(key, current)
-    current.active = false
-
-    if (requestedPlacement === "belowEditor") {
-      return
-    }
-
-    if (route.kind === "managed") {
-      current.resolution =
-        route.bucket.kind === "selector"
+  private updateObservation(key: string, route: WidgetRoute): void {
+    const observations = this.sections[route.placement].observations
+    const resolution: WidgetResolution =
+      route.kind === "managed"
+        ? route.bucket.kind === "selector"
           ? { kind: "selector", selector: route.bucket.selector }
           : { kind: "system", value: route.bucket.position }
-    } else {
-      current.resolution = { kind: "system", value: "native" }
-    }
-    current.active = true
+        : { kind: "system", value: "native" }
+    // Updating an existing Map entry preserves its first-seen slot in this region.
+    observations.set(key, { key, active: true, resolution })
   }
 
   private forwardToPreviousSetWidget(
@@ -192,28 +172,25 @@ export class WidgetLayoutController {
       this.callPreviousSetWidget(key, content, options)
       return
     }
-
     this.callPreviousSetWidget(key, content, options)
   }
 
-  private syncHost(placement: "aboveEditor"): void {
+  private syncHost(placement: WidgetPlacement): void {
     const section = this.sections[placement]
     const records = section.registry.getActiveRecords()
     if (records.length === 0) {
       if (section.host !== undefined) {
         section.host = undefined
-        this.forwardToPreviousSetWidget(HOST_WIDGET_KEY, undefined)
+        this.forwardToPreviousSetWidget(HOST_WIDGET_KEYS[placement], undefined)
       }
       return
     }
-
     if (section.host !== undefined) {
       section.host.update(records)
       return
     }
-
     this.forwardToPreviousSetWidget(
-      HOST_WIDGET_KEY,
+      HOST_WIDGET_KEYS[placement],
       (tui, theme) => {
         const host = new ManagedWidgetHost(records, tui, theme)
         section.host = host

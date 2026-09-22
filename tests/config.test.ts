@@ -21,6 +21,7 @@ describe("parseWidgetLayoutConfig", () => {
         unlisted: "native",
         order: [],
       },
+      belowEditor: { unlisted: "native", order: [] },
     })
     expect(result.diagnostics).toEqual([])
   })
@@ -47,16 +48,9 @@ describe("parseWidgetLayoutConfig", () => {
         unlisted: "above",
         order: ["alpha", "beta", "group-*"],
       },
+      belowEditor: { unlisted: "native", order: [] },
     })
     expect(result.diagnostics).toEqual([])
-  })
-
-  test("accepts every legal unlisted policy", () => {
-    for (const unlisted of ["native", "above", "below"] as const) {
-      const result = parseWidgetLayoutConfig({ aboveEditor: { unlisted } })
-      expect(result.config.aboveEditor.unlisted).toBe(unlisted)
-      expect(result.diagnostics).toEqual([])
-    }
   })
 
   test("invalid root falls back to defaults", () => {
@@ -112,68 +106,59 @@ describe("parseWidgetLayoutConfig", () => {
     ])
   })
 
-  test("invalid aboveEditor falls back to its default", () => {
-    const result = parseWidgetLayoutConfig({ aboveEditor: "invalid" })
+  for (const placement of ["aboveEditor", "belowEditor"] as const) {
+    test.each(["native", "above", "below"] as const)(
+      `${placement} accepts unlisted=%s`,
+      (unlisted) => {
+        const result = parseWidgetLayoutConfig({ [placement]: { unlisted } })
+        expect(result.config[placement].unlisted).toBe(unlisted)
+        expect(result.diagnostics).toEqual([])
+      },
+    )
 
-    expect(result.config).toEqual(createDefaultConfig())
-    expect(result.diagnostics[0]?.code).toBe("invalid-above-editor")
-  })
-
-  test("invalid order falls back to an empty order", () => {
-    const result = parseWidgetLayoutConfig({ aboveEditor: { order: "invalid" } })
-
-    expect(result.config.aboveEditor.order).toEqual([])
-    expect(result.diagnostics[0]?.code).toBe("invalid-order")
-  })
-
-  test("invalid order items are discarded with diagnostics", () => {
-    const result = parseWidgetLayoutConfig({
-      aboveEditor: { order: ["valid", 123, null, false] },
+    test(`${placement} validates and normalizes selectors`, () => {
+      const result = parseWidgetLayoutConfig({
+        [placement]: { order: [" first ", 123, null, false, "  ", "second", "first"] },
+      })
+      expect(result.config[placement].order).toEqual(["first", "second"])
+      expect(result.diagnostics.map(({ code }) => code)).toEqual([
+        "invalid-selector",
+        "invalid-selector",
+        "invalid-selector",
+        "invalid-selector",
+        "duplicate-selector",
+      ])
+      expect(
+        result.diagnostics.every(({ message }) => message.includes(`${placement}.order`)),
+      ).toBe(true)
     })
 
-    expect(result.config.aboveEditor.order).toEqual(["valid"])
-    expect(result.diagnostics.filter(({ code }) => code === "invalid-selector")).toHaveLength(3)
-  })
-
-  test("empty selectors are discarded", () => {
-    const result = parseWidgetLayoutConfig({
-      aboveEditor: { order: ["  ", "valid"] },
+    test(`${placement} rejects invalid sections and fields independently`, () => {
+      const invalidSection = parseWidgetLayoutConfig({ [placement]: "invalid" })
+      expect(invalidSection.config).toEqual(createDefaultConfig())
+      expect(invalidSection.diagnostics[0]?.message).toContain(placement)
+      const invalidFields = parseWidgetLayoutConfig({
+        [placement]: { order: "invalid", unlisted: "sideways" },
+      })
+      expect(invalidFields.config).toEqual(createDefaultConfig())
+      expect(invalidFields.diagnostics.map(({ code }) => code)).toEqual([
+        "invalid-unlisted",
+        "invalid-order",
+      ])
+      const other = placement === "aboveEditor" ? "belowEditor" : "aboveEditor"
+      const mixed = parseWidgetLayoutConfig({ [placement]: null, [other]: { order: ["valid"] } })
+      expect(mixed.config[other].order).toEqual(["valid"])
     })
+  }
 
-    expect(result.config.aboveEditor.order).toEqual(["valid"])
-    expect(result.diagnostics[0]?.code).toBe("invalid-selector")
-  })
-
-  test("selectors are trimmed", () => {
-    const result = parseWidgetLayoutConfig({
-      aboveEditor: { order: ["  valid  "] },
-    })
-
-    expect(result.config.aboveEditor.order).toEqual(["valid"])
-  })
-
-  test("duplicate selectors keep their first position", () => {
-    const result = parseWidgetLayoutConfig({
-      aboveEditor: { order: ["first", " first ", "second", "first"] },
-    })
-
-    expect(result.config.aboveEditor.order).toEqual(["first", "second"])
-    expect(result.diagnostics.filter(({ code }) => code === "duplicate-selector")).toHaveLength(2)
-  })
-
-  test("invalid unlisted falls back to native", () => {
-    const result = parseWidgetLayoutConfig({ aboveEditor: { unlisted: "sideways" } })
-
-    expect(result.config.aboveEditor.unlisted).toBe("native")
-    expect(result.diagnostics[0]?.code).toBe("invalid-unlisted")
-  })
-
-  test("default results do not share mutable order state", () => {
-    const first = createDefaultConfig()
-    first.aboveEditor.order.push("temporary")
-
-    const second = parseWidgetLayoutConfig({})
-    expect(second.config.aboveEditor.order).toEqual([])
+  test("defaults and parsed sections do not share mutable order state", () => {
+    const base = createDefaultConfig()
+    const parsed = parseWidgetLayoutConfig({}, base).config
+    parsed.aboveEditor.order.push("above")
+    parsed.belowEditor.order.push("below")
+    expect(base).toEqual(createDefaultConfig())
+    expect(parsed.aboveEditor.order).toEqual(["above"])
+    expect(parsed.belowEditor.order).toEqual(["below"])
   })
 })
 
@@ -243,37 +228,62 @@ describe("loadWidgetLayoutConfig", () => {
     }
   })
 
-  test("ignores project config when the project is untrusted", () => {
+  test("merges trusted project fields over isolated global config and combines diagnostics", () => {
     const directory = makeTempDirectory()
-    const projectDirectory = join(directory, ".pi")
-    mkdirSync(projectDirectory)
-    writeFileSync(
-      join(projectDirectory, "widget-layout.json"),
-      JSON.stringify({ aboveEditor: { order: ["__project_only__"] } }),
-      "utf8",
-    )
-
     try {
-      const result = loadWidgetLayoutConfig({ cwd: directory, projectTrusted: false })
-      expect(result.config.aboveEditor.order).not.toContain("__project_only__")
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
-  })
-
-  test("loads project config when the project is trusted", () => {
-    const directory = makeTempDirectory()
-    const projectDirectory = join(directory, ".pi")
-    mkdirSync(projectDirectory)
-    writeFileSync(
-      join(projectDirectory, "widget-layout.json"),
-      JSON.stringify({ aboveEditor: { order: ["__project_only__"] } }),
-      "utf8",
-    )
-
-    try {
-      const result = loadWidgetLayoutConfig({ cwd: directory, projectTrusted: true })
-      expect(result.config.aboveEditor.order).toEqual(["__project_only__"])
+      const agentDir = join(directory, "agent")
+      const projectDir = join(directory, ".pi")
+      mkdirSync(agentDir)
+      mkdirSync(projectDir)
+      writeFileSync(
+        join(agentDir, "widget-layout.json"),
+        JSON.stringify({
+          status: { keyColumnMaxWidth: 9, maxCollapsedLines: 0 },
+          aboveEditor: { unlisted: "above", order: ["global"] },
+          belowEditor: { unlisted: "below", order: ["global-below"] },
+        }),
+      )
+      writeFileSync(
+        join(projectDir, "widget-layout.json"),
+        JSON.stringify({
+          status: { maxCollapsedLines: 18 },
+          aboveEditor: { unlisted: "native" },
+          belowEditor: { unlisted: "invalid", order: ["project"] },
+        }),
+      )
+      // The global config path is captured at module load; isolate it before importing.
+      const child = Bun.spawnSync(
+        [
+          process.execPath,
+          "--eval",
+          `
+        import { loadWidgetLayoutConfig } from ${JSON.stringify(new URL("../src/config.ts", import.meta.url).href)};
+        console.log(JSON.stringify([false, true].map(projectTrusted =>
+          loadWidgetLayoutConfig({ cwd: ${JSON.stringify(directory)}, projectTrusted }))));
+      `,
+        ],
+        { env: { ...process.env, PI_CODING_AGENT_DIR: agentDir } },
+      )
+      expect(child.exitCode).toBe(0)
+      expect(child.stderr.toString()).toBe("")
+      const [untrusted, trusted] = JSON.parse(child.stdout.toString())
+      expect(untrusted.config).toEqual({
+        status: { keyColumnMaxWidth: 9, maxCollapsedLines: 12 },
+        aboveEditor: { unlisted: "above", order: ["global"] },
+        belowEditor: { unlisted: "below", order: ["global-below"] },
+      })
+      expect(untrusted.diagnostics.map((d: { code: string }) => d.code)).toEqual([
+        "invalid-max-collapsed-lines",
+      ])
+      expect(trusted.config).toEqual({
+        status: { keyColumnMaxWidth: 9, maxCollapsedLines: 18 },
+        aboveEditor: { unlisted: "native", order: ["global"] },
+        belowEditor: { unlisted: "below", order: ["project"] },
+      })
+      expect(trusted.diagnostics.map((d: { code: string }) => d.code)).toEqual([
+        "invalid-max-collapsed-lines",
+        "invalid-unlisted",
+      ])
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }

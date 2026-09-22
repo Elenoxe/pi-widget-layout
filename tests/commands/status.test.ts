@@ -244,4 +244,60 @@ describe("WidgetLayoutStatusComponent", () => {
 
     expect(component.render(80)[0]?.trim()).toBe("widget-layout")
   })
+
+  test.each([80, 24])(
+    "collapses both sections within one rendered-line budget at width %i",
+    (width) => {
+      const config = statusConfig({ maxCollapsedLines: 18 })
+      const sections = (["aboveEditor", "belowEditor"] as const).map((placement) => ({
+        placement,
+        unlisted: "native" as const,
+        order: ["*"],
+        widgets: Array.from({ length: 8 }, (_, i) => ({
+          key: `${placement}-${i}-long-widget`,
+          resolution: { kind: "selector" as const, selector: "*" },
+        })),
+      }))
+      const component = new WidgetLayoutStatusComponent(
+        formatStatus({ sections }, config),
+        false,
+        theme,
+        config,
+      )
+      const collapsed = component.render(width)
+      const text = collapsed.join("\n")
+      expect(collapsed.length).toBeLessThanOrEqual(18)
+      expect(text).toContain("aboveEditor")
+      expect(text).toContain("belowEditor")
+      expect(text).toContain("more")
+      expect(text).not.toContain("belowEditor-7")
+      component.handleMouse(leftClick())
+      const expanded = component.render(width).join("\n")
+      expect(expanded).toContain("aboveEditor-7")
+      expect(expanded).toContain("belowEditor-7")
+      expect(expanded).not.toContain("more")
+    },
+  )
+
+  test("preserves both section headers when they exceed the collapsed budget", () => {
+    const config = statusConfig({ maxCollapsedLines: 1 })
+    const above = snapshot(2).sections[0]!
+    const component = new WidgetLayoutStatusComponent(
+      formatStatus(
+        {
+          sections: [above, { ...above, placement: "belowEditor" }],
+        },
+        config,
+      ),
+      false,
+      theme,
+      config,
+    )
+    const rendered = component.render(80)
+    expect(rendered.length).toBeGreaterThan(1)
+    expect(rendered.join("\n")).toContain("aboveEditor")
+    expect(rendered.join("\n")).toContain("belowEditor")
+    expect(rendered.join("\n")).toContain("4 more")
+    expect(rendered.join("\n")).not.toContain("widget-0")
+  })
 })

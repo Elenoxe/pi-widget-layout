@@ -39,6 +39,10 @@ export function createDefaultConfig(): WidgetLayoutConfig {
       unlisted: "native",
       order: [],
     },
+    belowEditor: {
+      unlisted: "native",
+      order: [],
+    },
   }
 }
 
@@ -107,8 +111,10 @@ export function parseWidgetLayoutConfig(
     }
   }
 
-  if (Object.hasOwn(value, "aboveEditor")) {
-    parseSection(value.aboveEditor, config.aboveEditor, "aboveEditor", diagnostics)
+  for (const placement of ["aboveEditor", "belowEditor"] as const) {
+    if (Object.hasOwn(value, placement)) {
+      parseSection(value[placement], config[placement], placement, diagnostics)
+    }
   }
   return { config, diagnostics }
 }

@@ -2,10 +2,13 @@ import { describe, expect, test } from "bun:test"
 import type { Component, TUI } from "@earendil-works/pi-tui"
 import type { Theme } from "@earendil-works/pi-coding-agent"
 
-import { HOST_WIDGET_KEY, WidgetLayoutController, type WidgetLayoutUI } from "../src/controller.ts"
+import { HOST_WIDGET_KEYS, WidgetLayoutController, type WidgetLayoutUI } from "../src/controller.ts"
+
 import type { WidgetContent, WidgetFactory } from "../src/types.ts"
 import type { WidgetPlacement } from "../src/types.ts"
 import { createDefaultConfig } from "../src/config.ts"
+
+const HOST_WIDGET_KEY = HOST_WIDGET_KEYS.aboveEditor
 
 interface FakeWidget {
   content: WidgetContent
@@ -111,10 +114,11 @@ describe("WidgetLayoutController", () => {
           widgets: [
             { key: "managed", resolution: { kind: "selector", selector: "managed" } },
             { key: "unlisted", resolution: { kind: "system", value: "native" } },
-            { key: "below", resolution: { kind: "system", value: "native" } },
             { key: "later", resolution: { kind: "system", value: "native" } },
+            { key: "below", resolution: { kind: "system", value: "native" } },
           ],
         },
+        { placement: "belowEditor", unlisted: "native", order: [], widgets: [] },
       ],
     })
 
@@ -162,7 +166,7 @@ describe("WidgetLayoutController", () => {
     expect(ui.calls.slice(-3).map((call) => [call.key, call.content, call.placement])).toEqual([
       ["managed", ["native"], "belowEditor"],
       ["managed", undefined, undefined],
-      ["pi-widget-layout:host", expect.any(Function), "aboveEditor"],
+      [HOST_WIDGET_KEY, expect.any(Function), "aboveEditor"],
     ])
   })
 
