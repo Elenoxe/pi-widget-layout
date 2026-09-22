@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
-import { homedir } from "node:os"
 import { join } from "node:path"
+
+import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent"
 
 import type { ConfigDiagnostic, UnlistedPolicy, WidgetLayoutConfig } from "./types.ts"
 
@@ -11,7 +12,16 @@ export interface ConfigParseResult {
 
 export type ConfigLoadResult = ConfigParseResult
 
-export const DEFAULT_CONFIG_PATH = join(homedir(), ".pi", "agent", "widget-layout.json")
+export interface WidgetLayoutConfigLoadOptions {
+  readonly cwd: string
+  readonly projectTrusted: boolean
+}
+
+const DEFAULT_CONFIG_PATH = join(getAgentDir(), "widget-layout.json")
+
+function getProjectConfigPath(cwd: string): string {
+  return join(cwd, CONFIG_DIR_NAME, "widget-layout.json")
+}
 
 export function createDefaultConfig(): WidgetLayoutConfig {
   return {
@@ -25,6 +35,7 @@ export function createDefaultConfig(): WidgetLayoutConfig {
     },
   }
 }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -41,8 +52,11 @@ function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0
 }
 
-export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
-  const config = createDefaultConfig()
+export function parseWidgetLayoutConfig(
+  value: unknown,
+  baseConfig: WidgetLayoutConfig = createDefaultConfig(),
+): ConfigParseResult {
+  const config = structuredClone(baseConfig)
   const diagnostics: ConfigDiagnostic[] = []
 
   if (!isRecord(value)) {
@@ -118,6 +132,7 @@ export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
     if (!Array.isArray(orderValue)) {
       diagnostics.push(diagnostic("invalid-order", "aboveEditor.order must be an array."))
     } else {
+      const order: string[] = []
       const seen = new Set<string>()
       for (const [index, item] of orderValue.entries()) {
         if (typeof item !== "string") {
@@ -152,8 +167,9 @@ export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
         }
 
         seen.add(selector)
-        config.aboveEditor.order.push(selector)
+        order.push(selector)
       }
+      config.aboveEditor.order = order
     }
   }
 
@@ -169,17 +185,17 @@ function isMissingFileError(error: unknown): boolean {
   )
 }
 
-export function loadWidgetLayoutConfig(filePath = DEFAULT_CONFIG_PATH): ConfigLoadResult {
+function loadConfigFile(filePath: string, baseConfig: WidgetLayoutConfig): ConfigLoadResult {
   let text: string
   try {
     text = readFileSync(filePath, "utf8")
   } catch (error) {
     if (isMissingFileError(error)) {
-      return { config: createDefaultConfig(), diagnostics: [] }
+      return { config: structuredClone(baseConfig), diagnostics: [] }
     }
 
     return {
-      config: createDefaultConfig(),
+      config: structuredClone(baseConfig),
       diagnostics: [
         diagnostic("read-error", `Unable to read widget layout configuration at ${filePath}.`),
       ],
@@ -191,12 +207,32 @@ export function loadWidgetLayoutConfig(filePath = DEFAULT_CONFIG_PATH): ConfigLo
     value = JSON.parse(text) as unknown
   } catch {
     return {
-      config: createDefaultConfig(),
+      config: structuredClone(baseConfig),
       diagnostics: [
         diagnostic("invalid-json", `Widget layout configuration at ${filePath} is not valid JSON.`),
       ],
     }
   }
 
-  return parseWidgetLayoutConfig(value)
+  return parseWidgetLayoutConfig(value, baseConfig)
+}
+
+export function loadWidgetLayoutConfig(filePath?: string): ConfigLoadResult
+export function loadWidgetLayoutConfig(options: WidgetLayoutConfigLoadOptions): ConfigLoadResult
+export function loadWidgetLayoutConfig(
+  source: string | WidgetLayoutConfigLoadOptions = DEFAULT_CONFIG_PATH,
+): ConfigLoadResult {
+  if (typeof source === "string") {
+    return loadConfigFile(source, createDefaultConfig())
+  }
+  const globalResult = loadConfigFile(DEFAULT_CONFIG_PATH, createDefaultConfig())
+  if (!source.projectTrusted) {
+    return globalResult
+  }
+
+  const projectResult = loadConfigFile(getProjectConfigPath(source.cwd), globalResult.config)
+  return {
+    config: projectResult.config,
+    diagnostics: [...globalResult.diagnostics, ...projectResult.diagnostics],
+  }
 }

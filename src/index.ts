@@ -18,7 +18,10 @@ export default function widgetLayoutExtension(pi: ExtensionAPI): void {
       return
     }
 
-    const { config, diagnostics } = loadWidgetLayoutConfig()
+    const { config, diagnostics } = loadWidgetLayoutConfig({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted?.() ?? false,
+    })
     for (const diagnostic of diagnostics) {
       ctx.ui.notify(`[widget-layout] ${diagnostic.message}`, "warning")
     }
