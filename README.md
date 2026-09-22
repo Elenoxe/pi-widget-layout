@@ -7,6 +7,12 @@ Pi does not provide a way to configure widget order. Widget positions depend on 
 ## Installation
 
 ```bash
+pi install npm:@eleno/pi-widget-layout
+```
+
+Alternatively, install from GitHub:
+
+```bash
 pi install git:github.com/Elenoxe/pi-widget-layout
 ```
 

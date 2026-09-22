@@ -1,7 +1,28 @@
 {
   "name": "@eleno/pi-widget-layout",
   "type": "module",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Deterministic layout control for Pi extension widgets.",
+  "files": [
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Elenoxe/pi-widget-layout.git"
+  },
+  "homepage": "https://github.com/Elenoxe/pi-widget-layout#readme",
+  "bugs": {
+    "url": "https://github.com/Elenoxe/pi-widget-layout/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "widgets",
+    "layout"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "scripts": {
     "dev": "pi -e ./src/index.ts",
@@ -12,9 +33,12 @@
     "format": "prettier --write --ignore-unknown .",
     "format:check": "prettier --check --ignore-unknown .",
     "check": "bun run typecheck && bun run lint && bun run format:check",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prepublishOnly": "bun run test && bun run check"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.86.1",
+    "@earendil-works/pi-tui": "0.86.1",
     "@types/bun": "latest",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
@@ -30,8 +54,8 @@
     "*.{json,jsonc,yml,yaml,md}": "prettier --write --ignore-unknown"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.86.1",
-    "@earendil-works/pi-tui": "^0.86.1"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "pi": {
     "extensions": [
