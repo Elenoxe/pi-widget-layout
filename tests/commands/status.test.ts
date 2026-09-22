@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import type { Theme } from "@earendil-works/pi-coding-agent"
+import type { CustomEntry, Theme } from "@earendil-works/pi-coding-agent"
 import { type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui"
 
 import {
+  renderStatusEntry,
+  type StatusEntryData,
   WidgetLayoutStatusComponent,
   formatResolution,
   formatStatus,
@@ -232,5 +234,14 @@ describe("WidgetLayoutStatusComponent", () => {
     )
 
     expect(component.render(24).every((line) => visibleWidth(line) <= 24)).toBe(true)
+  })
+  test("renders an empty entry with default data", () => {
+    const component = renderStatusEntry(
+      { data: undefined } as CustomEntry<StatusEntryData>,
+      { expanded: false },
+      theme,
+    )
+
+    expect(component.render(80)[0]?.trim()).toBe("widget-layout")
   })
 })

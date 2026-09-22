@@ -20,7 +20,7 @@ interface Harness {
   context: ExtensionContext
 }
 
-function harness(): Harness {
+function harness(withRuntime = true): Harness {
   const result: Harness = {
     appendedEntries: [],
     notifications: [],
@@ -34,13 +34,15 @@ function harness(): Harness {
   result.context = { hasUI: true, mode: "tui", ui } as unknown as ExtensionContext
 
   const snapshot: WidgetLayoutSnapshot = { sections: [] }
-  const runtime = {
-    controller: { getSnapshot: () => snapshot },
-    config: {
-      status: { keyColumnMaxWidth: 8, maxCollapsedLines: 20 },
-      aboveEditor: { unlisted: "native", order: [] },
-    },
-  } as unknown as WidgetLayoutCommandRuntime
+  const runtime = withRuntime
+    ? ({
+        controller: { getSnapshot: () => snapshot },
+        config: {
+          status: { keyColumnMaxWidth: 8, maxCollapsedLines: 20 },
+          aboveEditor: { unlisted: "native", order: [] },
+        },
+      } as unknown as WidgetLayoutCommandRuntime)
+    : undefined
   const pi = {
     registerCommand(_name: string, command: FakeCommand) {
       result.command = command
@@ -61,7 +63,6 @@ function harness(): Harness {
 describe("widget-layout command", () => {
   test("defaults to status and accepts the explicit status subcommand", async () => {
     const result = harness()
-    expect(result.command).toBeDefined()
     expect(result.rendererType).toBe(STATUS_ENTRY_TYPE)
     await result.command!.handler("", result.context)
     await result.command!.handler("status", result.context)
@@ -91,18 +92,26 @@ describe("widget-layout command", () => {
         description: "Show current widget layout",
       },
     ])
+    expect(result.command?.getArgumentCompletions?.("status anything")).toBeNull()
   })
 
-  test("is silent outside TUI mode", async () => {
+  test("is silent outside TUI mode or without UI", async () => {
     const result = harness()
-    const context = { ...result.context, mode: "rpc" } as ExtensionContext
 
-    await result.command!.handler("unknown", context)
+    await result.command!.handler("unknown", { ...result.context, mode: "rpc" })
+    await result.command!.handler("unknown", { ...result.context, hasUI: false })
 
     expect(result.notifications).toEqual([])
     expect(result.appendedEntries).toHaveLength(0)
   })
 
+  test("is silent when runtime is unavailable", async () => {
+    const result = harness(false)
+
+    await result.command!.handler("", result.context)
+
+    expect(result.appendedEntries).toHaveLength(0)
+  })
   test("warns with registry-generated usage for an unknown command", async () => {
     const result = harness()
 

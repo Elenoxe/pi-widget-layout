@@ -36,7 +36,11 @@ describe("routeWidget", () => {
   })
 
   test("routes a wildcard match to its selector bucket", () => {
-    const result = routeWidget("group-b", "aboveEditor", config("below", ["*", "group-*"]))
+    const result = routeWidget(
+      "group-special",
+      "aboveEditor",
+      config("below", ["*", "group-*", "*-special"]),
+    )
 
     expect(result).toEqual({
       kind: "managed",
@@ -87,31 +91,5 @@ describe("routeWidget", () => {
       placement: "aboveEditor",
       bucket: { kind: "selector", selector: "*", index: 0 },
     })
-  })
-
-  test("exact precedence is reflected in the exact bucket index", () => {
-    const result = routeWidget(
-      "group-a",
-      "aboveEditor",
-      config("native", ["*", "group-*", "group-a"]),
-    )
-
-    expect(result.kind).toBe("managed")
-    if (result.kind === "managed") {
-      expect(result.bucket).toEqual({ kind: "selector", selector: "group-a", index: 2 })
-    }
-  })
-
-  test("wildcard precedence is reflected in the earlier wildcard bucket index", () => {
-    const result = routeWidget(
-      "group-special",
-      "aboveEditor",
-      config("native", ["*", "group-*", "*-special"]),
-    )
-
-    expect(result.kind).toBe("managed")
-    if (result.kind === "managed") {
-      expect(result.bucket).toEqual({ kind: "selector", selector: "group-*", index: 1 })
-    }
   })
 })

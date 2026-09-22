@@ -1,9 +1,7 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-
 import { describe, expect, test } from "bun:test"
-
 import {
   createDefaultConfig,
   loadWidgetLayoutConfig,
@@ -229,6 +227,53 @@ describe("loadWidgetLayoutConfig", () => {
       expect(result.config.aboveEditor.order).toEqual(["custom"])
       expect(result.config.aboveEditor.unlisted).toBe("below")
       expect(result.diagnostics).toEqual([])
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+  test("reports a read error for an unreadable config path", () => {
+    const directory = makeTempDirectory()
+
+    try {
+      const result = loadWidgetLayoutConfig(directory)
+      expect(result.config).toEqual(createDefaultConfig())
+      expect(result.diagnostics[0]?.code).toBe("read-error")
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  test("ignores project config when the project is untrusted", () => {
+    const directory = makeTempDirectory()
+    const projectDirectory = join(directory, ".pi")
+    mkdirSync(projectDirectory)
+    writeFileSync(
+      join(projectDirectory, "widget-layout.json"),
+      JSON.stringify({ aboveEditor: { order: ["__project_only__"] } }),
+      "utf8",
+    )
+
+    try {
+      const result = loadWidgetLayoutConfig({ cwd: directory, projectTrusted: false })
+      expect(result.config.aboveEditor.order).not.toContain("__project_only__")
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  test("loads project config when the project is trusted", () => {
+    const directory = makeTempDirectory()
+    const projectDirectory = join(directory, ".pi")
+    mkdirSync(projectDirectory)
+    writeFileSync(
+      join(projectDirectory, "widget-layout.json"),
+      JSON.stringify({ aboveEditor: { order: ["__project_only__"] } }),
+      "utf8",
+    )
+
+    try {
+      const result = loadWidgetLayoutConfig({ cwd: directory, projectTrusted: true })
+      expect(result.config.aboveEditor.order).toEqual(["__project_only__"])
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }

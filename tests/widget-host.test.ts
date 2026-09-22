@@ -131,7 +131,7 @@ describe("ManagedWidgetHost", () => {
     expect(bDisposals).toBe(1)
   })
 
-  test("truncates long string content like the native widget path", () => {
+  test("truncates long string content and adds a themed marker", () => {
     const theme = { fg: (_color: string, text: string) => `muted:${text}` } as unknown as Theme
     const host = new ManagedWidgetHost(
       [
@@ -145,7 +145,7 @@ describe("ManagedWidgetHost", () => {
       theme,
     )
 
-    expect(host.render(20).map((line) => line.trimEnd())).toEqual([
+    expect(host.render(80).map((line) => line.trimEnd())).toEqual([
       " 0",
       " 1",
       " 2",
@@ -156,8 +156,7 @@ describe("ManagedWidgetHost", () => {
       " 7",
       " 8",
       " 9",
-      " muted:... (widget",
-      " truncated)",
+      " muted:... (widget truncated)",
     ])
   })
 })

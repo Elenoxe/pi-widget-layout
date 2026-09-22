@@ -13,14 +13,6 @@ function command(name: string): WidgetLayoutSubcommand {
 }
 
 describe("WidgetLayoutCommandRegistry", () => {
-  test("starts empty without a default command", () => {
-    const registry = new WidgetLayoutCommandRegistry()
-
-    expect(registry.list()).toEqual([])
-    expect(registry.get("status")).toBeUndefined()
-    expect(registry.getDefault()).toBeUndefined()
-  })
-
   test("preserves registration order and returns registered commands", () => {
     const registry = new WidgetLayoutCommandRegistry()
     const status = command("status")

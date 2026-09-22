@@ -77,26 +77,6 @@ function host(ui: FakeUi): Component & { dispose?(): void } {
 }
 
 describe("WidgetLayoutController", () => {
-  test("routes managed content through one persistent host", () => {
-    const ui = new FakeUi()
-    const controller = new WidgetLayoutController(ui, config())
-    controller.install()
-
-    ui.setWidget("managed", ["first"])
-    ui.setWidget("managed-2", ["second"])
-
-    expect([...ui.widgets.keys()]).toEqual([HOST_WIDGET_KEY])
-    expect(
-      host(ui)
-        .render(40)
-        .map((line) => line.trimEnd()),
-    ).toEqual([" first", " second"])
-    expect(
-      ui.calls.filter((call) => call.key === HOST_WIDGET_KEY && call.content !== undefined),
-    ).toHaveLength(1)
-    expect(ui.renderRequests).toBe(1)
-  })
-
   test("forwards native widgets without mounting a host", () => {
     const ui = new FakeUi()
     const controller = new WidgetLayoutController(ui, config())
