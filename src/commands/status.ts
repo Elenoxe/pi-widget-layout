@@ -33,6 +33,8 @@ export interface StatusEntryData {
 export interface StatusLine {
   readonly text: string
   readonly collapsible: boolean
+  readonly section?: WidgetLayoutSectionSnapshot["placement"]
+  readonly detached?: boolean
 }
 
 export function formatResolution(resolution: WidgetResolution): string {
@@ -59,10 +61,6 @@ export function formatStatusSection(
     },
   ]
 
-  if (section.widgets.length === 0) {
-    lines.push({ text: "  widgets: —", collapsible: false })
-  }
-
   const keyWidth = Math.min(
     config.keyColumnMaxWidth,
     Math.max(...section.widgets.map((widget) => visibleWidth(widget.key))),
@@ -75,12 +73,12 @@ export function formatStatusSection(
     })
   }
   if (section.detached.length > 0) {
-    lines.push({ text: "  detached:", collapsible: false })
+    lines.push({ text: "  detached:", collapsible: false, detached: true })
     for (const widget of section.detached) {
-      lines.push({ text: `    ○ ${widget.key}`, collapsible: true })
+      lines.push({ text: `    ○ ${widget.key}`, collapsible: true, detached: true })
     }
   }
-  return lines
+  return lines.map((line) => ({ ...line, section: section.placement }))
 }
 
 export function formatStatus(snapshot: WidgetLayoutSnapshot, config: StatusConfig): StatusLine[] {
@@ -95,28 +93,48 @@ function renderPlain(lines: readonly StatusLine[], width: number): string[] {
   return new Text(lines.map((line) => line.text).join("\n"), 1, 0).render(Math.max(1, width))
 }
 
-function buildCollapsedLines(
-  lines: readonly StatusLine[],
-  visibleWidgetCount: number,
-): StatusLine[] {
-  const totalWidgetCount = lines.filter((line) => line.collapsible).length
+function widgetPriority(lines: readonly StatusLine[]): StatusLine[] {
+  const sections = [...new Set(lines.map((line) => line.section))]
   const result: StatusLine[] = []
-  let shownWidgetCount = 0
-
-  for (const line of lines) {
-    if (!line.collapsible) {
-      result.push(line)
-      continue
-    }
-    if (shownWidgetCount < visibleWidgetCount) {
-      result.push(line)
-      shownWidgetCount += 1
+  for (const detached of [false, true]) {
+    const groups = sections.map((section) =>
+      lines.filter(
+        (line) =>
+          line.section === section && line.collapsible && Boolean(line.detached) === detached,
+      ),
+    )
+    const count = Math.max(0, ...groups.map((group) => group.length))
+    for (let index = 0; index < count; index += 1) {
+      for (const group of groups) {
+        const line = group[index]
+        if (line) result.push(line)
+      }
     }
   }
+  return result
+}
 
-  const hiddenWidgetCount = totalWidgetCount - visibleWidgetCount
-  if (hiddenWidgetCount > 0) {
-    result.push({ text: `  … ${hiddenWidgetCount} more`, collapsible: false })
+function buildCollapsedLines(
+  lines: readonly StatusLine[],
+  visible: ReadonlySet<StatusLine>,
+): StatusLine[] {
+  const result: StatusLine[] = []
+  const sections = [...new Set(lines.map((line) => line.section))]
+  for (const section of sections) {
+    const group = lines.filter((line) => line.section === section)
+    const hasDetached = group.some((line) => line.detached && visible.has(line))
+    let hidden = 0
+    for (const line of group) {
+      if (line.collapsible) {
+        if (visible.has(line)) result.push(line)
+        else hidden += 1
+      } else if (!line.detached || hasDetached) {
+        result.push(line)
+      }
+    }
+    if (hidden > 0) {
+      result.push({ text: `  … ${hidden} more`, collapsible: false, section })
+    }
   }
   return result
 }
@@ -141,20 +159,17 @@ export class WidgetLayoutStatusComponent implements Component {
       return this.renderStyled(this.lines, width)
     }
 
-    const totalWidgetCount = this.lines.filter((line) => line.collapsible).length
-    for (
-      let visibleWidgetCount = totalWidgetCount;
-      visibleWidgetCount >= 0;
-      visibleWidgetCount -= 1
-    ) {
-      const candidate = buildCollapsedLines(this.lines, visibleWidgetCount)
-      if (renderPlain(candidate, width).length <= this.config.maxCollapsedLines) {
+    const priority = widgetPriority(this.lines)
+    const visible = new Set(priority)
+    // ponytail: quadratic candidate rendering; cache row heights if status histories become large.
+    for (let count = priority.length; count >= 0; count -= 1) {
+      const candidate = buildCollapsedLines(this.lines, visible)
+      if (renderPlain(candidate, width).length <= this.config.maxCollapsedLines || count === 0) {
         return this.renderStyled(candidate, width)
       }
+      visible.delete(priority[count - 1]!)
     }
-
-    // Keep section headers/configuration and the summary even when they exceed the budget.
-    return this.renderStyled(buildCollapsedLines(this.lines, 0), width)
+    return []
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {

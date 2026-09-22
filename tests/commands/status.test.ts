@@ -105,6 +105,7 @@ describe("status formatter", () => {
       const lines = formatStatus(empty, statusConfig())
       expect(lines.length).toBeGreaterThan(0)
       expect(lines.some((line) => line.collapsible)).toBe(false)
+      expect(lines).toHaveLength(1 + empty.sections.length * 2)
       const component = new WidgetLayoutStatusComponent(lines, false, theme, statusConfig())
       expect(component.render(80).every((line) => line.trim().length > 0)).toBe(true)
     }
@@ -271,7 +272,9 @@ describe("WidgetLayoutStatusComponent", () => {
       expect(collapsed.length).toBeLessThanOrEqual(18)
       expect(text).toContain("aboveEditor")
       expect(text).toContain("belowEditor")
-      expect(text).toContain("more")
+      expect(text).toContain("aboveEditor-0")
+      expect(text).toContain("belowEditor-0")
+      expect(collapsed.filter((line) => line.includes("more"))).toHaveLength(2)
       expect(text).not.toContain("belowEditor-7")
       component.handleMouse(leftClick())
       const expanded = component.render(width).join("\n")
@@ -299,7 +302,57 @@ describe("WidgetLayoutStatusComponent", () => {
     expect(rendered.length).toBeGreaterThan(1)
     expect(rendered.join("\n")).toContain("aboveEditor")
     expect(rendered.join("\n")).toContain("belowEditor")
-    expect(rendered.join("\n")).toContain("4 more")
+    expect(rendered.filter((line) => line.includes("2 more"))).toHaveLength(2)
     expect(rendered.join("\n")).not.toContain("widget-0")
+  })
+  test("shares layout budget before detached history and summarizes each section", () => {
+    const sections = (["aboveEditor", "belowEditor"] as const).map((placement) => ({
+      placement,
+      unlisted: "native" as const,
+      order: ["*"],
+      widgets: Array.from({ length: 3 }, (_, i) => ({
+        key: `${placement === "aboveEditor" ? "a" : "b"}${i}`,
+        active: true,
+        resolution: { kind: "selector" as const, selector: "*" },
+      })),
+      detached: Array.from({ length: 4 }, (_, i) => ({
+        key: `old-${placement}-${i}`,
+        lastSeen: 4 - i,
+      })),
+    }))
+    const config = statusConfig({ maxCollapsedLines: 10 })
+    const lines = formatStatus({ sections }, config)
+    const component = new WidgetLayoutStatusComponent(lines, false, theme, config)
+    const collapsed = component.render(100)
+    expect(collapsed.length).toBeLessThanOrEqual(10)
+    const text = collapsed.join("\n")
+    expect(text).toContain("a0")
+    expect(text).toContain("b0")
+    expect(text).not.toContain("detached:")
+    expect(text).not.toContain("old-")
+    expect(collapsed.filter((line) => line.includes("more")).map((line) => line.trim())).toEqual([
+      "… 5 more",
+      "… 6 more",
+    ])
+    const roomy = new WidgetLayoutStatusComponent(lines, false, theme, {
+      ...config,
+      maxCollapsedLines: 15,
+    })
+    const partial = roomy.render(100).join("\n")
+    expect(partial).toContain("a2")
+    expect(partial).toContain("b2")
+    expect(partial).toContain("old-aboveEditor-0")
+    expect(partial).not.toContain("old-belowEditor-0")
+    expect(partial.match(/detached:/g)).toHaveLength(1)
+    expect(partial).toContain("3 more")
+    expect(partial).toContain("4 more")
+    component.handleMouse(leftClick())
+    const expanded = component.render(100).join("\n")
+    expect(expanded).toContain("old-belowEditor-3")
+    expect(expanded).not.toContain("more")
+    const fullConfig = { ...config, maxCollapsedLines: component.render(100).length }
+    const short = new WidgetLayoutStatusComponent(lines, false, theme, fullConfig)
+    expect(short.render(100).join("\n")).toBe(expanded)
+    expect(short.handleMouse(leftClick())).toBeUndefined()
   })
 })
