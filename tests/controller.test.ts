@@ -275,7 +275,7 @@ describe("WidgetLayoutController", () => {
     const lines = formatStatus(controller.getSnapshot(), settings.status)
     expect(lines.every((line) => line.text.trim().length > 0)).toBe(true)
     expect(lines.some((line) => line.text === "unmanaged")).toBe(false)
-    expect(lines.find((line) => line.text === "    ○ before")?.color).toBe("dim")
+    expect(lines.some((line) => line.text === "    ○ before")).toBe(true)
     expect(
       lines.filter((line) => line.text.includes("detached:")).map((line) => line.text),
     ).toEqual(["  detached:"])

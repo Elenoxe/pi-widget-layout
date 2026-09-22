@@ -33,7 +33,6 @@ export interface StatusEntryData {
 export interface StatusLine {
   readonly text: string
   readonly collapsible: boolean
-  readonly color: "accent" | "muted" | "dim"
 }
 
 export function formatResolution(resolution: WidgetResolution): string {
@@ -53,17 +52,15 @@ export function formatStatusSection(
     {
       text: `${section.placement}  unlisted=[${section.unlisted}]`,
       collapsible: false,
-      color: "accent",
     },
     {
       text: `  order: ${section.order.length === 0 ? "—" : section.order.join(" > ")}`,
       collapsible: false,
-      color: "muted",
     },
   ]
 
   if (section.widgets.length === 0) {
-    lines.push({ text: "  widgets: —", collapsible: false, color: "dim" })
+    lines.push({ text: "  widgets: —", collapsible: false })
   }
 
   const keyWidth = Math.min(
@@ -75,20 +72,19 @@ export function formatStatusSection(
     lines.push({
       text: `  ${widget.active ? "●" : "○"} ${widget.key}${" ".repeat(padding)} → ${formatResolution(widget.resolution)}`,
       collapsible: true,
-      color: widget.active ? "muted" : "dim",
     })
   }
   if (section.detached.length > 0) {
-    lines.push({ text: "  detached:", collapsible: false, color: "accent" })
+    lines.push({ text: "  detached:", collapsible: false })
     for (const widget of section.detached) {
-      lines.push({ text: `    ○ ${widget.key}`, collapsible: true, color: "dim" })
+      lines.push({ text: `    ○ ${widget.key}`, collapsible: true })
     }
   }
   return lines
 }
 
 export function formatStatus(snapshot: WidgetLayoutSnapshot, config: StatusConfig): StatusLine[] {
-  const lines: StatusLine[] = [{ text: "widget-layout", collapsible: false, color: "accent" }]
+  const lines: StatusLine[] = [{ text: "widget-layout", collapsible: false }]
   for (const section of snapshot.sections) {
     lines.push(...formatStatusSection(section, config))
   }
@@ -120,7 +116,7 @@ function buildCollapsedLines(
 
   const hiddenWidgetCount = totalWidgetCount - visibleWidgetCount
   if (hiddenWidgetCount > 0) {
-    result.push({ text: `  … ${hiddenWidgetCount} more`, collapsible: false, color: "dim" })
+    result.push({ text: `  … ${hiddenWidgetCount} more`, collapsible: false })
   }
   return result
 }
@@ -173,7 +169,7 @@ export class WidgetLayoutStatusComponent implements Component {
   invalidate(): void {}
 
   private renderStyled(lines: readonly StatusLine[], width: number): string[] {
-    const text = lines.map((line) => this.theme.fg(line.color, line.text)).join("\n")
+    const text = lines.map((line) => this.theme.fg("dim", line.text)).join("\n")
     return new Text(text, 1, 0).render(Math.max(1, width))
   }
 }

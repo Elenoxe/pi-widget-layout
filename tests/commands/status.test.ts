@@ -98,14 +98,6 @@ describe("status formatter", () => {
       "  ● notes   → [native]",
     ])
     expect(lines.slice(3).every((line) => line.collapsible)).toBe(true)
-    expect(lines.map((line) => line.color)).toEqual([
-      "accent",
-      "accent",
-      "muted",
-      "dim",
-      "muted",
-      "muted",
-    ])
   })
 
   test("uses fixed empty-state lines", () => {
