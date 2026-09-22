@@ -4,17 +4,17 @@ import { routeWidget } from "../src/routing.ts"
 import type { WidgetLayoutConfig } from "../src/types.ts"
 
 function config(
-  order: string[],
   unlisted: WidgetLayoutConfig["aboveEditor"]["unlisted"],
+  order: string[],
 ): WidgetLayoutConfig {
   return {
-    aboveEditor: { order, unlisted },
+    aboveEditor: { unlisted, order },
   }
 }
 
 describe("routeWidget", () => {
   test("always bypasses originally requested belowEditor widgets", () => {
-    const result = routeWidget("foo", "belowEditor", config(["*", "foo"], "above"))
+    const result = routeWidget("foo", "belowEditor", config("above", ["*", "foo"]))
 
     expect(result).toEqual({ kind: "native", placement: "belowEditor" })
   })
@@ -23,7 +23,7 @@ describe("routeWidget", () => {
     const result = routeWidget(
       "group-a",
       "aboveEditor",
-      config(["*", "group-*", "group-a"], "below"),
+      config("below", ["*", "group-*", "group-a"]),
     )
 
     expect(result).toEqual({
@@ -34,7 +34,7 @@ describe("routeWidget", () => {
   })
 
   test("routes a wildcard match to its selector bucket", () => {
-    const result = routeWidget("group-b", "aboveEditor", config(["*", "group-*"], "below"))
+    const result = routeWidget("group-b", "aboveEditor", config("below", ["*", "group-*"]))
 
     expect(result).toEqual({
       kind: "managed",
@@ -44,7 +44,7 @@ describe("routeWidget", () => {
   })
 
   test("routes a catch-all match to its selector bucket", () => {
-    const result = routeWidget("foo", "aboveEditor", config(["specific", "*"], "below"))
+    const result = routeWidget("foo", "aboveEditor", config("below", ["specific", "*"]))
 
     expect(result).toEqual({
       kind: "managed",
@@ -54,13 +54,13 @@ describe("routeWidget", () => {
   })
 
   test("keeps an unmatched widget native aboveEditor", () => {
-    const result = routeWidget("foo", "aboveEditor", config(["group-*"], "native"))
+    const result = routeWidget("foo", "aboveEditor", config("native", ["group-*"]))
 
     expect(result).toEqual({ kind: "native", placement: "aboveEditor" })
   })
 
   test("manages an unmatched widget in the implicit above bucket", () => {
-    const result = routeWidget("foo", "aboveEditor", config(["group-*", "other-*"], "above"))
+    const result = routeWidget("foo", "aboveEditor", config("above", ["group-*", "other-*"]))
 
     expect(result).toEqual({
       kind: "managed",
@@ -70,7 +70,7 @@ describe("routeWidget", () => {
   })
 
   test("places the implicit bucket after every explicit selector", () => {
-    const result = routeWidget("foo", "aboveEditor", config(["a", "b", "c"], "above"))
+    const result = routeWidget("foo", "aboveEditor", config("above", ["a", "b", "c"]))
 
     expect(result.kind).toBe("managed")
     if (result.kind === "managed") {
@@ -79,13 +79,13 @@ describe("routeWidget", () => {
   })
 
   test("moves an unmatched widget below when unlisted is below", () => {
-    const result = routeWidget("foo", "aboveEditor", config(["group-*"], "below"))
+    const result = routeWidget("foo", "aboveEditor", config("below", ["group-*"]))
 
     expect(result).toEqual({ kind: "native", placement: "belowEditor" })
   })
 
   test("an explicit catch-all prevents unlisted fallback", () => {
-    const result = routeWidget("foo", "aboveEditor", config(["*"], "below"))
+    const result = routeWidget("foo", "aboveEditor", config("below", ["*"]))
 
     expect(result).toEqual({
       kind: "managed",
@@ -98,7 +98,7 @@ describe("routeWidget", () => {
     const result = routeWidget(
       "group-a",
       "aboveEditor",
-      config(["*", "group-*", "group-a"], "native"),
+      config("native", ["*", "group-*", "group-a"]),
     )
 
     expect(result.kind).toBe("managed")
@@ -111,7 +111,7 @@ describe("routeWidget", () => {
     const result = routeWidget(
       "group-special",
       "aboveEditor",
-      config(["*", "group-*", "*-special"], "native"),
+      config("native", ["*", "group-*", "*-special"]),
     )
 
     expect(result.kind).toBe("managed")

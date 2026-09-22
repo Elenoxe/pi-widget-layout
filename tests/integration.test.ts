@@ -60,12 +60,12 @@ class Harness implements WidgetLayoutUI {
 
 function controllerFor(
   harness: Harness,
-  order: string[],
   unlisted: "native" | "above" | "below",
+  order: string[],
 ): WidgetLayoutController {
   return new WidgetLayoutController(harness, {
     ...createDefaultConfig(),
-    aboveEditor: { order, unlisted },
+    aboveEditor: { unlisted, order },
   })
 }
 
@@ -86,7 +86,7 @@ function renderHost(harness: Harness): string[] {
 describe("widget layout integration", () => {
   test("keeps one host and unchanged children alive across transitions", () => {
     const harness = new Harness()
-    const controller = controllerFor(harness, ["alpha", "beta"], "below")
+    const controller = controllerFor(harness, "below", ["alpha", "beta"])
     controller.install()
     let creates = 0
     let disposals = 0
@@ -143,7 +143,7 @@ describe("widget layout integration", () => {
 
   test("resolves exact, wildcard, and catch-all selectors with stable slots", () => {
     const harness = new Harness()
-    const controller = controllerFor(harness, ["*", "group-*", "exact"], "native")
+    const controller = controllerFor(harness, "native", ["*", "group-*", "exact"])
     controller.install()
 
     harness.setWidget("other", ["other"])
@@ -161,7 +161,7 @@ describe("widget layout integration", () => {
 
   test("honors unlisted policies and always bypasses managed routing below the editor", () => {
     const nativeHarness = new Harness()
-    const nativeController = controllerFor(nativeHarness, ["managed"], "native")
+    const nativeController = controllerFor(nativeHarness, "native", ["managed"])
     nativeController.install()
 
     nativeHarness.setWidget("unlisted", ["native"])
@@ -172,7 +172,7 @@ describe("widget layout integration", () => {
     nativeController.dispose()
 
     const aboveHarness = new Harness()
-    const aboveController = controllerFor(aboveHarness, ["managed"], "above")
+    const aboveController = controllerFor(aboveHarness, "above", ["managed"])
     aboveController.install()
 
     aboveHarness.setWidget("unlisted", ["managed-unlisted"])

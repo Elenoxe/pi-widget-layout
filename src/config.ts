@@ -16,8 +16,8 @@ export const DEFAULT_CONFIG_PATH = join(homedir(), ".pi", "agent", "widget-layou
 export function createDefaultConfig(): WidgetLayoutConfig {
   return {
     aboveEditor: {
-      order: [],
       unlisted: "native",
+      order: [],
     },
   }
 }
@@ -55,6 +55,20 @@ export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
       diagnostic("invalid-above-editor", "The aboveEditor configuration must be an object."),
     )
     return { config, diagnostics }
+  }
+
+  if (Object.hasOwn(aboveEditorValue, "unlisted")) {
+    const unlistedValue = aboveEditorValue.unlisted
+    if (isUnlistedPolicy(unlistedValue)) {
+      config.aboveEditor.unlisted = unlistedValue
+    } else {
+      diagnostics.push(
+        diagnostic(
+          "invalid-unlisted",
+          'aboveEditor.unlisted must be one of "native", "above", or "below".',
+        ),
+      )
+    }
   }
 
   if (Object.hasOwn(aboveEditorValue, "order")) {
@@ -98,20 +112,6 @@ export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
         seen.add(selector)
         config.aboveEditor.order.push(selector)
       }
-    }
-  }
-
-  if (Object.hasOwn(aboveEditorValue, "unlisted")) {
-    const unlistedValue = aboveEditorValue.unlisted
-    if (isUnlistedPolicy(unlistedValue)) {
-      config.aboveEditor.unlisted = unlistedValue
-    } else {
-      diagnostics.push(
-        diagnostic(
-          "invalid-unlisted",
-          'aboveEditor.unlisted must be one of "native", "above", or "below".',
-        ),
-      )
     }
   }
 

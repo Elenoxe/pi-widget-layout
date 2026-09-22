@@ -27,16 +27,16 @@ describe("parseWidgetLayoutConfig", () => {
   test("parses a valid config", () => {
     const result = parseWidgetLayoutConfig({
       aboveEditor: {
-        order: [" alpha ", "beta", "group-*"],
         unlisted: "above",
+        order: [" alpha ", "beta", "group-*"],
       },
       unknown: true,
     })
 
     expect(result.config).toEqual({
       aboveEditor: {
-        order: ["alpha", "beta", "group-*"],
         unlisted: "above",
+        order: ["alpha", "beta", "group-*"],
       },
     })
     expect(result.diagnostics).toEqual([])
@@ -156,7 +156,7 @@ describe("loadWidgetLayoutConfig", () => {
     const filePath = join(directory, "custom.json")
     writeFileSync(
       filePath,
-      JSON.stringify({ aboveEditor: { order: ["custom"], unlisted: "below" } }),
+      JSON.stringify({ aboveEditor: { unlisted: "below", order: ["custom"] } }),
       "utf8",
     )
 

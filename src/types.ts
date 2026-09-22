@@ -6,8 +6,8 @@ export type WidgetPlacement = "aboveEditor" | "belowEditor"
 export type UnlistedPolicy = "native" | "above" | "below"
 
 export interface AboveEditorConfig {
-  order: string[]
   unlisted: UnlistedPolicy
+  order: string[]
 }
 
 export interface WidgetLayoutConfig {

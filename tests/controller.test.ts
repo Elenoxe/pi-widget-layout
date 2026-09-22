@@ -64,7 +64,7 @@ class FakeUi implements WidgetLayoutUI {
 function config(unlisted: "native" | "above" | "below" = "native") {
   return {
     ...createDefaultConfig(),
-    aboveEditor: { order: ["managed", "managed-2"], unlisted },
+    aboveEditor: { unlisted, order: ["managed", "managed-2"] },
   }
 }
 
