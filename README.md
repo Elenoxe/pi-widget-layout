@@ -26,7 +26,7 @@ footer
 
 Extension widgets live in the `aboveEditor` and `belowEditor` areas. Pi normally keeps them in insertion order, so their relative positions can change as extensions create, update, clear, or re-add widgets.
 
-`pi-widget-layout` intercepts widget registrations before they enter Pi's native `aboveEditor` ordering. Widgets selected by the configuration are collected into a managed host widget and rendered there in a fixed order. Their position is determined by the configured selectors instead of extension update timing.
+`pi-widget-layout` intercepts widget registrations for both `aboveEditor` and `belowEditor`. Each area has its own configuration and a managed host widget. Selected widgets are rendered inside that host in a fixed order. Their position is determined by the configured selectors instead of extension update timing.
 
 ## Commands
 
@@ -57,6 +57,10 @@ Example:
   "aboveEditor": {
     "unlisted": "native",
     "order": ["alpha", "*", "item-*"]
+  },
+  "belowEditor": {
+    "unlisted": "native",
+    "order": ["beta-*", "some-*-widget", "*"]
   }
 }
 ```
@@ -70,9 +74,9 @@ Controls the display of `/widget-layout`.
 | `keyColumnMaxWidth` |    `24` | Maximum alignment width for widget keys      |
 | `maxCollapsedLines` |    `12` | Line limit before status output is collapsed |
 
-### `aboveEditor`
+### `aboveEditor` and `belowEditor`
 
-`aboveEditor.order` defines the fixed widget order using exact keys and simple `*` wildcards.
+Each area's `order` defines the fixed widget order using exact keys and simple `*` wildcards.
 
 Matching priority:
 
@@ -82,7 +86,7 @@ exact > wildcard > *
 
 Exact selectors take priority over wildcard selectors. If multiple wildcard selectors match, the earlier selector in `order` wins. Widgets matched by the same selector keep the order in which they first appeared.
 
-`aboveEditor.unlisted` controls `aboveEditor` widgets that do not match any selector:
+Each area's `unlisted` controls widgets in that area that do not match any selector:
 
 | Value    | Behavior                                                          |
 | -------- | ----------------------------------------------------------------- |
