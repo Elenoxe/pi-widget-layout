@@ -3,7 +3,13 @@ import { join } from "node:path"
 
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent"
 
-import type { ConfigDiagnostic, UnlistedPolicy, WidgetLayoutConfig } from "./types.ts"
+import type {
+  ConfigDiagnostic,
+  UnlistedPolicy,
+  WidgetLayoutConfig,
+  WidgetPlacement,
+  WidgetSectionConfig,
+} from "./types.ts"
 
 export interface ConfigParseResult {
   config: WidgetLayoutConfig
@@ -101,79 +107,73 @@ export function parseWidgetLayoutConfig(
     }
   }
 
-  if (!Object.hasOwn(value, "aboveEditor")) {
-    return { config, diagnostics }
+  if (Object.hasOwn(value, "aboveEditor")) {
+    parseSection(value.aboveEditor, config.aboveEditor, "aboveEditor", diagnostics)
   }
+  return { config, diagnostics }
+}
 
-  const aboveEditorValue = value.aboveEditor
-  if (!isRecord(aboveEditorValue)) {
+function parseSection(
+  value: unknown,
+  config: WidgetSectionConfig,
+  placement: WidgetPlacement,
+  diagnostics: ConfigDiagnostic[],
+): void {
+  if (!isRecord(value)) {
     diagnostics.push(
-      diagnostic("invalid-above-editor", "The aboveEditor configuration must be an object."),
+      diagnostic(
+        placement === "aboveEditor" ? "invalid-above-editor" : "invalid-below-editor",
+        `The ${placement} configuration must be an object.`,
+      ),
     )
-    return { config, diagnostics }
+    return
   }
 
-  if (Object.hasOwn(aboveEditorValue, "unlisted")) {
-    const unlistedValue = aboveEditorValue.unlisted
-    if (isUnlistedPolicy(unlistedValue)) {
-      config.aboveEditor.unlisted = unlistedValue
+  if (Object.hasOwn(value, "unlisted")) {
+    if (isUnlistedPolicy(value.unlisted)) {
+      config.unlisted = value.unlisted
     } else {
       diagnostics.push(
         diagnostic(
           "invalid-unlisted",
-          'aboveEditor.unlisted must be one of "native", "above", or "below".',
+          `${placement}.unlisted must be one of "native", "above", or "below".`,
         ),
       )
     }
   }
 
-  if (Object.hasOwn(aboveEditorValue, "order")) {
-    const orderValue = aboveEditorValue.order
-    if (!Array.isArray(orderValue)) {
-      diagnostics.push(diagnostic("invalid-order", "aboveEditor.order must be an array."))
+  if (Object.hasOwn(value, "order")) {
+    if (!Array.isArray(value.order)) {
+      diagnostics.push(diagnostic("invalid-order", `${placement}.order must be an array.`))
     } else {
       const order: string[] = []
       const seen = new Set<string>()
-      for (const [index, item] of orderValue.entries()) {
-        if (typeof item !== "string") {
+      for (const [index, item] of value.order.entries()) {
+        if (typeof item !== "string" || item.trim().length === 0) {
           diagnostics.push(
             diagnostic(
               "invalid-selector",
-              `aboveEditor.order[${index}] must be a non-empty string.`,
+              `${placement}.order[${index}] must be a non-empty string.`,
             ),
           )
           continue
         }
-
         const selector = item.trim()
-        if (selector.length === 0) {
-          diagnostics.push(
-            diagnostic(
-              "invalid-selector",
-              `aboveEditor.order[${index}] must be a non-empty string.`,
-            ),
-          )
-          continue
-        }
-
         if (seen.has(selector)) {
           diagnostics.push(
             diagnostic(
               "duplicate-selector",
-              `aboveEditor.order contains duplicate selector "${selector}".`,
+              `${placement}.order contains duplicate selector "${selector}".`,
             ),
           )
           continue
         }
-
         seen.add(selector)
         order.push(selector)
       }
-      config.aboveEditor.order = order
+      config.order = order
     }
   }
-
-  return { config, diagnostics }
 }
 
 function isMissingFileError(error: unknown): boolean {

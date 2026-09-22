@@ -1,6 +1,6 @@
 import type { ExtensionWidgetOptions } from "@earendil-works/pi-coding-agent"
 
-import { compileOrder } from "./matcher.ts"
+import { compileOrder, type CompiledOrder } from "./matcher.ts"
 import { ManagedWidgetHost } from "./widget-host.ts"
 import { routeWidget } from "./routing.ts"
 import type { WidgetRoute } from "./routing.ts"
@@ -15,6 +15,14 @@ import type {
 } from "./types.ts"
 
 export const HOST_WIDGET_KEY = "pi-widget-layout:host"
+
+interface SectionState {
+  compiledOrder: CompiledOrder
+  registry: WidgetRegistry<WidgetContent>
+  observations: Map<string, ObservedWidget>
+  nextObserved: number
+  host?: ManagedWidgetHost
+}
 
 interface ObservedWidget {
   key: string
@@ -35,11 +43,7 @@ export class WidgetLayoutController {
   private readonly previousSetWidget: WidgetSetHandler
   private readonly callPreviousSetWidget: WidgetSetHandler
   private readonly wrappedSetWidget: WidgetSetHandler
-  private readonly compiledOrder
-  private readonly registry = new WidgetRegistry<WidgetContent>()
-  private readonly observedWidgets = new Map<string, ObservedWidget>()
-  private nextObserved = 0
-  private host?: ManagedWidgetHost
+  private readonly sections: Record<"aboveEditor", SectionState>
   private installed = false
 
   constructor(
@@ -56,7 +60,14 @@ export class WidgetLayoutController {
 
       this.handleSetWidget(key, content, options)
     }
-    this.compiledOrder = compileOrder(config.aboveEditor.order)
+    this.sections = {
+      aboveEditor: {
+        compiledOrder: compileOrder(config.aboveEditor.order),
+        registry: new WidgetRegistry(),
+        observations: new Map(),
+        nextObserved: 0,
+      },
+    }
   }
 
   install(): void {
@@ -69,15 +80,16 @@ export class WidgetLayoutController {
   }
 
   dispose(): void {
-    const host = this.host
-    this.host = undefined
+    const section = this.sections.aboveEditor
+    const host = section.host
+    section.host = undefined
     if (host !== undefined) {
       this.forwardToPreviousSetWidget(HOST_WIDGET_KEY, undefined)
     }
 
-    this.observedWidgets.clear()
-    this.nextObserved = 0
-    this.registry.reset()
+    section.observations.clear()
+    section.nextObserved = 0
+    section.registry.reset()
     if (this.ui.setWidget === this.wrappedSetWidget) {
       this.ui.setWidget = this.previousSetWidget
     }
@@ -85,7 +97,7 @@ export class WidgetLayoutController {
   }
 
   getSnapshot(): WidgetLayoutSnapshot {
-    const widgets = [...this.observedWidgets.values()]
+    const widgets = [...this.sections.aboveEditor.observations.values()]
       .filter((widget) => widget.active)
       .sort((left, right) => left.firstObserved - right.firstObserved)
       .map(({ key, resolution }) => ({
@@ -110,22 +122,23 @@ export class WidgetLayoutController {
     options?: ExtensionWidgetOptions,
   ): void {
     const requestedPlacement = options?.placement ?? "aboveEditor"
-    const route = routeWidget(key, requestedPlacement, this.config, this.compiledOrder)
+    const section = this.sections.aboveEditor
+    const route = routeWidget(key, requestedPlacement, this.config, section.compiledOrder)
 
     this.updateObservation(key, content, requestedPlacement, route)
     if (route.kind === "managed") {
       this.forwardToPreviousSetWidget(key, undefined, options)
       if (content === undefined) {
-        this.registry.set(key, undefined, route)
+        section.registry.set(key, undefined, route)
       } else {
-        this.registry.set(key, content, route)
+        section.registry.set(key, content, route)
       }
-      this.syncHost()
+      this.syncHost("aboveEditor")
       return
     }
 
-    this.registry.clear(key)
-    this.syncHost()
+    section.registry.clear(key)
+    this.syncHost("aboveEditor")
     const nativeOptions =
       route.placement === requestedPlacement ? options : { ...options, placement: route.placement }
     this.forwardToPreviousSetWidget(key, content, nativeOptions)
@@ -137,7 +150,8 @@ export class WidgetLayoutController {
     requestedPlacement: WidgetPlacement,
     route: WidgetRoute,
   ): void {
-    const observed = this.observedWidgets.get(key)
+    const section = this.sections.aboveEditor
+    const observed = section.observations.get(key)
     if (content === undefined) {
       if (observed !== undefined) {
         observed.active = false
@@ -147,11 +161,11 @@ export class WidgetLayoutController {
 
     const current = observed ?? {
       key,
-      firstObserved: this.nextObserved++,
+      firstObserved: section.nextObserved++,
       active: false,
       resolution: { kind: "system", value: "native" } as WidgetResolution,
     }
-    this.observedWidgets.set(key, current)
+    section.observations.set(key, current)
     current.active = false
 
     if (requestedPlacement === "belowEditor") {
@@ -182,18 +196,19 @@ export class WidgetLayoutController {
     this.callPreviousSetWidget(key, content, options)
   }
 
-  private syncHost(): void {
-    const records = this.registry.getActiveRecords()
+  private syncHost(placement: "aboveEditor"): void {
+    const section = this.sections[placement]
+    const records = section.registry.getActiveRecords()
     if (records.length === 0) {
-      if (this.host !== undefined) {
-        this.host = undefined
+      if (section.host !== undefined) {
+        section.host = undefined
         this.forwardToPreviousSetWidget(HOST_WIDGET_KEY, undefined)
       }
       return
     }
 
-    if (this.host !== undefined) {
-      this.host.update(records)
+    if (section.host !== undefined) {
+      section.host.update(records)
       return
     }
 
@@ -201,10 +216,10 @@ export class WidgetLayoutController {
       HOST_WIDGET_KEY,
       (tui, theme) => {
         const host = new ManagedWidgetHost(records, tui, theme)
-        this.host = host
+        section.host = host
         return host
       },
-      { placement: "aboveEditor" },
+      { placement },
     )
   }
 }

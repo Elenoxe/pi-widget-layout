@@ -10,14 +10,14 @@ export interface StatusConfig {
   maxCollapsedLines: number
 }
 
-export interface AboveEditorConfig {
+export interface WidgetSectionConfig {
   unlisted: UnlistedPolicy
   order: string[]
 }
 
 export interface WidgetLayoutConfig {
   status: StatusConfig
-  aboveEditor: AboveEditorConfig
+  aboveEditor: WidgetSectionConfig
 }
 
 export type WidgetResolution =
