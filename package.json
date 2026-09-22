@@ -2,6 +2,7 @@
   "name": "@eleno/pi-widget-layout",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "pi -e ./src/index.ts",
     "test": "bun test --pass-with-no-tests",
