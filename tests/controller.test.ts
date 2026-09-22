@@ -109,6 +109,62 @@ describe("WidgetLayoutController", () => {
     expect(ui.widgets.has(HOST_WIDGET_KEY)).toBe(false)
   })
 
+  test("snapshots above-editor observations in first-seen order", () => {
+    const ui = new FakeUi()
+    const controller = new WidgetLayoutController(ui, config())
+    controller.install()
+
+    ui.setWidget("managed", ["managed"])
+    ui.setWidget("unlisted", ["native"])
+    ui.setWidget("below", ["below"], { placement: "belowEditor" })
+    ui.setWidget("later", ["later"])
+    ui.setWidget("managed", undefined)
+    ui.setWidget("managed", ["managed-again"])
+    ui.setWidget("below", ["above-again"])
+
+    expect(controller.getSnapshot()).toEqual({
+      sections: [
+        {
+          placement: "aboveEditor",
+          unlisted: "native",
+          order: ["managed", "managed-2"],
+          widgets: [
+            { key: "managed", resolution: { kind: "selector", selector: "managed" } },
+            { key: "unlisted", resolution: { kind: "system", value: "native" } },
+            { key: "below", resolution: { kind: "system", value: "native" } },
+            { key: "later", resolution: { kind: "system", value: "native" } },
+          ],
+        },
+      ],
+    })
+
+    const snapshot = controller.getSnapshot()
+    const section = snapshot.sections[0]
+    if (section === undefined) {
+      throw new Error("snapshot section is missing")
+    }
+    ;(section.order as string[]).push("mutated")
+    expect(controller.getSnapshot().sections[0]?.order).toEqual(["managed", "managed-2"])
+  })
+
+  test("maps unlisted above and below policies to system resolutions", () => {
+    const aboveUi = new FakeUi()
+    const aboveController = new WidgetLayoutController(aboveUi, config("above"))
+    aboveController.install()
+    aboveUi.setWidget("unlisted", ["above"])
+
+    const belowUi = new FakeUi()
+    const belowController = new WidgetLayoutController(belowUi, config("below"))
+    belowController.install()
+    belowUi.setWidget("unlisted", ["below"])
+
+    expect(aboveController.getSnapshot().sections[0]?.widgets).toEqual([
+      { key: "unlisted", resolution: { kind: "system", value: "above" } },
+    ])
+    expect(belowController.getSnapshot().sections[0]?.widgets).toEqual([
+      { key: "unlisted", resolution: { kind: "system", value: "belowEditor" } },
+    ])
+  })
   test("moves a widget from native ownership to managed ownership", () => {
     const ui = new FakeUi()
     const controller = new WidgetLayoutController(ui, config())

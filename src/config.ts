@@ -15,13 +15,16 @@ export const DEFAULT_CONFIG_PATH = join(homedir(), ".pi", "agent", "widget-layou
 
 export function createDefaultConfig(): WidgetLayoutConfig {
   return {
+    status: {
+      keyColumnMaxWidth: 24,
+      maxCollapsedLines: 12,
+    },
     aboveEditor: {
       unlisted: "native",
       order: [],
     },
   }
 }
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -34,6 +37,10 @@ function isUnlistedPolicy(value: unknown): value is UnlistedPolicy {
   return value === "native" || value === "above" || value === "below"
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+}
+
 export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
   const config = createDefaultConfig()
   const diagnostics: ConfigDiagnostic[] = []
@@ -43,6 +50,41 @@ export function parseWidgetLayoutConfig(value: unknown): ConfigParseResult {
       diagnostic("invalid-root", "Widget layout configuration root must be an object."),
     )
     return { config, diagnostics }
+  }
+
+  if (Object.hasOwn(value, "status")) {
+    const statusValue = value.status
+    if (!isRecord(statusValue)) {
+      diagnostics.push(diagnostic("invalid-status", "The status configuration must be an object."))
+    } else {
+      if (Object.hasOwn(statusValue, "keyColumnMaxWidth")) {
+        const keyColumnMaxWidth = statusValue.keyColumnMaxWidth
+        if (isPositiveInteger(keyColumnMaxWidth)) {
+          config.status.keyColumnMaxWidth = keyColumnMaxWidth
+        } else {
+          diagnostics.push(
+            diagnostic(
+              "invalid-key-column-max-width",
+              "status.keyColumnMaxWidth must be a positive integer.",
+            ),
+          )
+        }
+      }
+
+      if (Object.hasOwn(statusValue, "maxCollapsedLines")) {
+        const maxCollapsedLines = statusValue.maxCollapsedLines
+        if (isPositiveInteger(maxCollapsedLines)) {
+          config.status.maxCollapsedLines = maxCollapsedLines
+        } else {
+          diagnostics.push(
+            diagnostic(
+              "invalid-max-collapsed-lines",
+              "status.maxCollapsedLines must be a positive integer.",
+            ),
+          )
+        }
+      }
+    }
   }
 
   if (!Object.hasOwn(value, "aboveEditor")) {

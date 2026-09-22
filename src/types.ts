@@ -5,13 +5,39 @@ export type WidgetPlacement = "aboveEditor" | "belowEditor"
 
 export type UnlistedPolicy = "native" | "above" | "below"
 
+export interface StatusConfig {
+  keyColumnMaxWidth: number
+  maxCollapsedLines: number
+}
+
 export interface AboveEditorConfig {
   unlisted: UnlistedPolicy
   order: string[]
 }
 
 export interface WidgetLayoutConfig {
+  status: StatusConfig
   aboveEditor: AboveEditorConfig
+}
+
+export type WidgetResolution =
+  | { kind: "selector"; selector: string }
+  | { kind: "system"; value: "native" | "above" | "belowEditor" }
+
+export interface WidgetSnapshot {
+  readonly key: string
+  readonly resolution: WidgetResolution
+}
+
+export interface WidgetLayoutSectionSnapshot {
+  readonly placement: WidgetPlacement
+  readonly unlisted: UnlistedPolicy
+  readonly order: readonly string[]
+  readonly widgets: readonly WidgetSnapshot[]
+}
+
+export interface WidgetLayoutSnapshot {
+  readonly sections: readonly WidgetLayoutSectionSnapshot[]
 }
 
 export interface ConfigDiagnostic {

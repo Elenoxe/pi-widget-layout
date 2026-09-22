@@ -10,22 +10,29 @@ import {
   parseWidgetLayoutConfig,
 } from "../src/config.ts"
 
-const DEFAULT_CONFIG = createDefaultConfig()
-
-function makeTempDirectory(): string {
-  return mkdtempSync(join(tmpdir(), "pi-widget-layout-"))
-}
-
 describe("parseWidgetLayoutConfig", () => {
   test("empty object returns defaults", () => {
     const result = parseWidgetLayoutConfig({})
 
-    expect(result.config).toEqual(DEFAULT_CONFIG)
+    expect(result.config).toEqual({
+      status: {
+        keyColumnMaxWidth: 24,
+        maxCollapsedLines: 12,
+      },
+      aboveEditor: {
+        unlisted: "native",
+        order: [],
+      },
+    })
     expect(result.diagnostics).toEqual([])
   })
 
-  test("parses a valid config", () => {
+  test("parses status and aboveEditor", () => {
     const result = parseWidgetLayoutConfig({
+      status: {
+        keyColumnMaxWidth: 8,
+        maxCollapsedLines: 20,
+      },
       aboveEditor: {
         unlisted: "above",
         order: [" alpha ", "beta", "group-*"],
@@ -34,6 +41,10 @@ describe("parseWidgetLayoutConfig", () => {
     })
 
     expect(result.config).toEqual({
+      status: {
+        keyColumnMaxWidth: 8,
+        maxCollapsedLines: 20,
+      },
       aboveEditor: {
         unlisted: "above",
         order: ["alpha", "beta", "group-*"],
@@ -53,15 +64,60 @@ describe("parseWidgetLayoutConfig", () => {
   test("invalid root falls back to defaults", () => {
     const result = parseWidgetLayoutConfig(null)
 
-    expect(result.config).toEqual(DEFAULT_CONFIG)
+    expect(result.config).toEqual(createDefaultConfig())
     expect(result.diagnostics).toHaveLength(1)
     expect(result.diagnostics[0]?.code).toBe("invalid-root")
+  })
+
+  test("invalid status falls back to defaults with a diagnostic", () => {
+    const result = parseWidgetLayoutConfig({ status: "invalid" })
+
+    expect(result.config.status).toEqual({
+      keyColumnMaxWidth: 24,
+      maxCollapsedLines: 12,
+    })
+    expect(result.diagnostics[0]?.code).toBe("invalid-status")
+  })
+
+  test("invalid keyColumnMaxWidth falls back without clamping", () => {
+    for (const value of [0, -1, 1.5, "8"]) {
+      const result = parseWidgetLayoutConfig({ status: { keyColumnMaxWidth: value } })
+
+      expect(result.config.status.keyColumnMaxWidth).toBe(24)
+      expect(result.diagnostics[0]?.code).toBe("invalid-key-column-max-width")
+    }
+  })
+
+  test("invalid maxCollapsedLines falls back without clamping", () => {
+    for (const value of [0, -1, 1.5, "20"]) {
+      const result = parseWidgetLayoutConfig({ status: { maxCollapsedLines: value } })
+
+      expect(result.config.status.maxCollapsedLines).toBe(12)
+      expect(result.diagnostics[0]?.code).toBe("invalid-max-collapsed-lines")
+    }
+  })
+
+  test("one invalid status field does not affect the other", () => {
+    const result = parseWidgetLayoutConfig({
+      status: { keyColumnMaxWidth: 8, maxCollapsedLines: 0 },
+    })
+
+    expect(result.config.status).toEqual({
+      keyColumnMaxWidth: 8,
+      maxCollapsedLines: 12,
+    })
+    expect(result.diagnostics).toEqual([
+      {
+        code: "invalid-max-collapsed-lines",
+        message: "status.maxCollapsedLines must be a positive integer.",
+      },
+    ])
   })
 
   test("invalid aboveEditor falls back to its default", () => {
     const result = parseWidgetLayoutConfig({ aboveEditor: "invalid" })
 
-    expect(result.config).toEqual(DEFAULT_CONFIG)
+    expect(result.config).toEqual(createDefaultConfig())
     expect(result.diagnostics[0]?.code).toBe("invalid-above-editor")
   })
 
@@ -123,6 +179,10 @@ describe("parseWidgetLayoutConfig", () => {
   })
 })
 
+function makeTempDirectory(): string {
+  return mkdtempSync(join(tmpdir(), "pi-widget-layout-"))
+}
+
 describe("loadWidgetLayoutConfig", () => {
   test("missing file returns defaults without a diagnostic", () => {
     const directory = makeTempDirectory()
@@ -130,7 +190,7 @@ describe("loadWidgetLayoutConfig", () => {
 
     try {
       const result = loadWidgetLayoutConfig(filePath)
-      expect(result.config).toEqual(DEFAULT_CONFIG)
+      expect(result.config).toEqual(createDefaultConfig())
       expect(result.diagnostics).toEqual([])
     } finally {
       rmSync(directory, { recursive: true, force: true })
@@ -144,7 +204,7 @@ describe("loadWidgetLayoutConfig", () => {
 
     try {
       const result = loadWidgetLayoutConfig(filePath)
-      expect(result.config).toEqual(DEFAULT_CONFIG)
+      expect(result.config).toEqual(createDefaultConfig())
       expect(result.diagnostics[0]?.code).toBe("invalid-json")
     } finally {
       rmSync(directory, { recursive: true, force: true })
@@ -156,12 +216,16 @@ describe("loadWidgetLayoutConfig", () => {
     const filePath = join(directory, "custom.json")
     writeFileSync(
       filePath,
-      JSON.stringify({ aboveEditor: { unlisted: "below", order: ["custom"] } }),
+      JSON.stringify({
+        status: { keyColumnMaxWidth: 8, maxCollapsedLines: 20 },
+        aboveEditor: { unlisted: "below", order: ["custom"] },
+      }),
       "utf8",
     )
 
     try {
       const result = loadWidgetLayoutConfig(filePath)
+      expect(result.config.status).toEqual({ keyColumnMaxWidth: 8, maxCollapsedLines: 20 })
       expect(result.config.aboveEditor.order).toEqual(["custom"])
       expect(result.config.aboveEditor.unlisted).toBe("below")
       expect(result.diagnostics).toEqual([])

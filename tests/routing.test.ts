@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
+import { createDefaultConfig } from "../src/config.ts"
 import { routeWidget } from "../src/routing.ts"
 import type { WidgetLayoutConfig } from "../src/types.ts"
 
@@ -8,6 +9,7 @@ function config(
   order: string[],
 ): WidgetLayoutConfig {
   return {
+    ...createDefaultConfig(),
     aboveEditor: { unlisted, order },
   }
 }

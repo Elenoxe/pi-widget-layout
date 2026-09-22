@@ -3,11 +3,25 @@ import type { ExtensionWidgetOptions } from "@earendil-works/pi-coding-agent"
 import { compileOrder } from "./matcher.ts"
 import { ManagedWidgetHost } from "./widget-host.ts"
 import { routeWidget } from "./routing.ts"
+import type { WidgetRoute } from "./routing.ts"
 import { WidgetRegistry } from "./registry.ts"
-import type { WidgetContent, WidgetFactory, WidgetLayoutConfig } from "./types.ts"
+import type {
+  WidgetContent,
+  WidgetFactory,
+  WidgetLayoutConfig,
+  WidgetLayoutSnapshot,
+  WidgetPlacement,
+  WidgetResolution,
+} from "./types.ts"
 
 export const HOST_WIDGET_KEY = "pi-widget-layout:host"
 
+interface ObservedWidget {
+  key: string
+  firstObserved: number
+  active: boolean
+  resolution: WidgetResolution
+}
 export interface WidgetSetHandler {
   (key: string, content: string[] | undefined, options?: ExtensionWidgetOptions): void
   (key: string, content: WidgetFactory | undefined, options?: ExtensionWidgetOptions): void
@@ -23,6 +37,8 @@ export class WidgetLayoutController {
   private readonly wrappedSetWidget: WidgetSetHandler
   private readonly compiledOrder
   private readonly registry = new WidgetRegistry<WidgetContent>()
+  private readonly observedWidgets = new Map<string, ObservedWidget>()
+  private nextObserved = 0
   private host?: ManagedWidgetHost
   private installed = false
 
@@ -59,6 +75,8 @@ export class WidgetLayoutController {
       this.forwardToPreviousSetWidget(HOST_WIDGET_KEY, undefined)
     }
 
+    this.observedWidgets.clear()
+    this.nextObserved = 0
     this.registry.reset()
     if (this.ui.setWidget === this.wrappedSetWidget) {
       this.ui.setWidget = this.previousSetWidget
@@ -66,6 +84,26 @@ export class WidgetLayoutController {
     this.installed = false
   }
 
+  getSnapshot(): WidgetLayoutSnapshot {
+    const widgets = [...this.observedWidgets.values()]
+      .filter((widget) => widget.active)
+      .sort((left, right) => left.firstObserved - right.firstObserved)
+      .map(({ key, resolution }) => ({
+        key,
+        resolution: { ...resolution },
+      }))
+
+    return {
+      sections: [
+        {
+          placement: "aboveEditor",
+          unlisted: this.config.aboveEditor.unlisted,
+          order: [...this.config.aboveEditor.order],
+          widgets,
+        },
+      ],
+    }
+  }
   private handleSetWidget(
     key: string,
     content: WidgetContent | undefined,
@@ -74,6 +112,7 @@ export class WidgetLayoutController {
     const requestedPlacement = options?.placement ?? "aboveEditor"
     const route = routeWidget(key, requestedPlacement, this.config, this.compiledOrder)
 
+    this.updateObservation(key, content, requestedPlacement, route)
     if (route.kind === "managed") {
       this.forwardToPreviousSetWidget(key, undefined, options)
       if (content === undefined) {
@@ -90,6 +129,47 @@ export class WidgetLayoutController {
     const nativeOptions =
       route.placement === requestedPlacement ? options : { ...options, placement: route.placement }
     this.forwardToPreviousSetWidget(key, content, nativeOptions)
+  }
+
+  private updateObservation(
+    key: string,
+    content: WidgetContent | undefined,
+    requestedPlacement: WidgetPlacement,
+    route: WidgetRoute,
+  ): void {
+    const observed = this.observedWidgets.get(key)
+    if (content === undefined) {
+      if (observed !== undefined) {
+        observed.active = false
+      }
+      return
+    }
+
+    const current = observed ?? {
+      key,
+      firstObserved: this.nextObserved++,
+      active: false,
+      resolution: { kind: "system", value: "native" } as WidgetResolution,
+    }
+    this.observedWidgets.set(key, current)
+    current.active = false
+
+    if (requestedPlacement === "belowEditor") {
+      return
+    }
+
+    if (route.kind === "managed") {
+      current.resolution =
+        route.bucket.kind === "selector"
+          ? { kind: "selector", selector: route.bucket.selector }
+          : { kind: "system", value: "above" }
+    } else {
+      current.resolution =
+        route.placement === "belowEditor"
+          ? { kind: "system", value: "belowEditor" }
+          : { kind: "system", value: "native" }
+    }
+    current.active = true
   }
 
   private forwardToPreviousSetWidget(

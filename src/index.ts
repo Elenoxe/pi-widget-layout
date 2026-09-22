@@ -1,14 +1,18 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 
+import { registerCommands } from "./commands/index.ts"
+import type { WidgetLayoutCommandRuntime } from "./commands/registry.ts"
 import { loadWidgetLayoutConfig } from "./config.ts"
 import { WidgetLayoutController } from "./controller.ts"
 
 export default function widgetLayoutExtension(pi: ExtensionAPI): void {
-  let controller: WidgetLayoutController | undefined
+  let runtime: WidgetLayoutCommandRuntime | undefined
+
+  registerCommands(pi, () => runtime)
 
   pi.on("session_start", (_event, ctx) => {
-    controller?.dispose()
-    controller = undefined
+    runtime?.controller.dispose()
+    runtime = undefined
 
     if (!ctx.hasUI || ctx.mode !== "tui") {
       return
@@ -19,12 +23,13 @@ export default function widgetLayoutExtension(pi: ExtensionAPI): void {
       ctx.ui.notify(`[widget-layout] ${diagnostic.message}`, "warning")
     }
 
-    controller = new WidgetLayoutController(ctx.ui, config)
+    const controller = new WidgetLayoutController(ctx.ui, config)
     controller.install()
+    runtime = { controller, config }
   })
 
   pi.on("session_shutdown", () => {
-    controller?.dispose()
-    controller = undefined
+    runtime?.controller.dispose()
+    runtime = undefined
   })
 }
