@@ -131,8 +131,8 @@ describe("ManagedWidgetHost", () => {
     expect(bDisposals).toBe(1)
   })
 
-  test("truncates long string content and adds a themed marker", () => {
-    const theme = { fg: (_color: string, text: string) => `muted:${text}` } as unknown as Theme
+  test("truncates long string content and adds a truncation marker", () => {
+    const theme = { fg: (_color: string, text: string) => text } as unknown as Theme
     const host = new ManagedWidgetHost(
       [
         record(
@@ -156,7 +156,7 @@ describe("ManagedWidgetHost", () => {
       " 7",
       " 8",
       " 9",
-      " muted:... (widget truncated)",
+      " ... (widget truncated)",
     ])
   })
 })

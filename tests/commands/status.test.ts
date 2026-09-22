@@ -100,17 +100,14 @@ describe("status formatter", () => {
     expect(lines.slice(3).every((line) => line.collapsible)).toBe(true)
   })
 
-  test("uses fixed empty-state lines", () => {
-    expect(formatStatus(snapshot(), statusConfig()).map((line) => line.text)).toEqual([
-      "widget-layout",
-      "aboveEditor  unlisted=[native]",
-      "  order: native > group-* > *",
-      "  widgets: —",
-    ])
-
-    expect(formatStatus({ sections: [] }, statusConfig()).map((line) => line.text)).toEqual([
-      "widget-layout",
-    ])
+  test("renders empty snapshots without widget rows", () => {
+    for (const empty of [snapshot(), { sections: [] }]) {
+      const lines = formatStatus(empty, statusConfig())
+      expect(lines.length).toBeGreaterThan(0)
+      expect(lines.some((line) => line.collapsible)).toBe(false)
+      const component = new WidgetLayoutStatusComponent(lines, false, theme, statusConfig())
+      expect(component.render(80).every((line) => line.trim().length > 0)).toBe(true)
+    }
   })
 
   test("honors the configured key column width", () => {

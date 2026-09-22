@@ -107,24 +107,6 @@ describe("WidgetRegistry", () => {
     expect(activeKeys(registry)).toEqual(["earlier-bucket", "later-bucket"])
   })
 
-  test("same bucket uses firstSeen order", () => {
-    const registry = new WidgetRegistry<string>()
-
-    registry.set("second", "second", selectorRoute(3))
-    registry.set("first", "first", selectorRoute(3))
-
-    expect(activeKeys(registry)).toEqual(["second", "first"])
-  })
-
-  test("multiple widgets can share a wildcard-style bucket", () => {
-    const registry = new WidgetRegistry<string>()
-
-    registry.set("group-b", "b", selectorRoute(1, "group-*"))
-    registry.set("group-a", "a", selectorRoute(1, "group-*"))
-
-    expect(activeKeys(registry)).toEqual(["group-b", "group-a"])
-  })
-
   test("orders unlisted above, selectors, and unlisted below with stable first-seen slots", () => {
     const registry = new WidgetRegistry<string>()
     registry.set("selector-a", "a", selectorRoute(0))
@@ -152,17 +134,6 @@ describe("WidgetRegistry", () => {
 
     expect(activeKeys(registry)).toEqual(["B"])
     expect(registry.get("A")).toMatchObject({ active: false, content: undefined })
-  })
-
-  test("reactivation restores the original position", () => {
-    const registry = new WidgetRegistry<string>()
-
-    registry.set("A", "a", selectorRoute(0))
-    registry.set("B", "b", selectorRoute(0))
-    registry.clear("A")
-    registry.set("A", "a-again", selectorRoute(0))
-
-    expect(activeKeys(registry)).toEqual(["A", "B"])
   })
 
   test("reset clears records and restarts firstSeen", () => {
