@@ -162,12 +162,9 @@ export class WidgetLayoutController {
       current.resolution =
         route.bucket.kind === "selector"
           ? { kind: "selector", selector: route.bucket.selector }
-          : { kind: "system", value: "above" }
+          : { kind: "system", value: route.bucket.position }
     } else {
-      current.resolution =
-        route.placement === "belowEditor"
-          ? { kind: "system", value: "belowEditor" }
-          : { kind: "system", value: "native" }
+      current.resolution = { kind: "system", value: "native" }
     }
     current.active = true
   }

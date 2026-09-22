@@ -67,23 +67,16 @@ describe("routeWidget", () => {
     expect(result).toEqual({
       kind: "managed",
       placement: "aboveEditor",
-      bucket: { kind: "unlisted", index: 2 },
+      bucket: { kind: "unlisted", position: "above", index: -1 },
     })
   })
 
-  test("places the implicit bucket after every explicit selector", () => {
-    const result = routeWidget("foo", "aboveEditor", config("above", ["a", "b", "c"]))
-
-    expect(result.kind).toBe("managed")
-    if (result.kind === "managed") {
-      expect(result.bucket.index).toBe(3)
-    }
-  })
-
-  test("moves an unmatched widget below when unlisted is below", () => {
-    const result = routeWidget("foo", "aboveEditor", config("below", ["group-*"]))
-
-    expect(result).toEqual({ kind: "native", placement: "belowEditor" })
+  test("places unlisted below after all selectors inside the host", () => {
+    expect(routeWidget("foo", "aboveEditor", config("below", ["a", "b"]))).toEqual({
+      kind: "managed",
+      placement: "aboveEditor",
+      bucket: { kind: "unlisted", position: "below", index: 2 },
+    })
   })
 
   test("an explicit catch-all prevents unlisted fallback", () => {

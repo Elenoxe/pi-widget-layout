@@ -21,8 +21,7 @@ export interface WidgetLayoutConfig {
 }
 
 export type WidgetResolution =
-  | { kind: "selector"; selector: string }
-  | { kind: "system"; value: "native" | "above" | "belowEditor" }
+  { kind: "selector"; selector: string } | { kind: "system"; value: "native" | "above" | "below" }
 
 export interface WidgetSnapshot {
   readonly key: string

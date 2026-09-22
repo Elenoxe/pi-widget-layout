@@ -60,7 +60,8 @@ describe("status formatter", () => {
   test("formats selector and system resolutions distinctly", () => {
     expect(formatResolution({ kind: "selector", selector: "native" })).toBe("native")
     expect(formatResolution({ kind: "system", value: "native" })).toBe("[native]")
-    expect(formatResolution({ kind: "system", value: "belowEditor" })).toBe("[belowEditor]")
+    expect(formatResolution({ kind: "system", value: "above" })).toBe("[above]")
+    expect(formatResolution({ kind: "system", value: "below" })).toBe("[below]")
   })
 
   test("formats section structure and aligned widget lines", () => {

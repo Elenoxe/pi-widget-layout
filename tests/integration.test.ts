@@ -183,4 +183,33 @@ describe("widget layout integration", () => {
     expect(renderHost(aboveHarness)).toEqual([" managed-unlisted"])
     aboveController.dispose()
   })
+  for (const position of ["above", "below"] as const) {
+    test(`renders unlisted ${position} inside the host in first-seen order`, () => {
+      const harness = new Harness()
+      const controller = controllerFor(harness, position, ["managed"])
+      controller.install()
+      const keys =
+        position === "above"
+          ? ["managed", "unlisted-a", "unlisted-b"]
+          : ["unlisted-a", "managed", "unlisted-b"]
+      for (const key of keys) harness.setWidget(key, [key])
+      const expected =
+        position === "above"
+          ? [" unlisted-a", " unlisted-b", " managed"]
+          : [" managed", " unlisted-a", " unlisted-b"]
+      expect(renderHost(harness)).toEqual(expected)
+      harness.setWidget("unlisted-a", undefined)
+      harness.setWidget("unlisted-a", ["unlisted-a"])
+      expect(renderHost(harness)).toEqual(expected)
+      expect(harness.hostMounts).toBe(1)
+      expect(harness.widgets.get(HOST_WIDGET_KEY)?.placement).toBe("aboveEditor")
+      harness.setWidget("original-below", ["bypass"], { placement: "belowEditor" })
+      expect(harness.widgets.get("original-below")?.placement).toBe("belowEditor")
+      expect(renderHost(harness)).toEqual(expected)
+      expect(
+        controller.getSnapshot().sections[0]?.widgets.some((w) => w.key === "original-below"),
+      ).toBe(false)
+      controller.dispose()
+    })
+  }
 })

@@ -162,7 +162,7 @@ describe("WidgetLayoutController", () => {
       { key: "unlisted", resolution: { kind: "system", value: "above" } },
     ])
     expect(belowController.getSnapshot().sections[0]?.widgets).toEqual([
-      { key: "unlisted", resolution: { kind: "system", value: "belowEditor" } },
+      { key: "unlisted", resolution: { kind: "system", value: "below" } },
     ])
   })
   test("moves a widget from native ownership to managed ownership", () => {

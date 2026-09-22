@@ -10,6 +10,7 @@ export interface SelectorBucket {
 
 export interface UnlistedBucket {
   kind: "unlisted"
+  position: "above" | "below"
   index: number
 }
 
@@ -52,19 +53,17 @@ export function routeWidget(
     }
   }
 
-  if (config.aboveEditor.unlisted === "above") {
+  const position = config.aboveEditor.unlisted
+  if (position !== "native") {
     return {
       kind: "managed",
       placement: "aboveEditor",
       bucket: {
         kind: "unlisted",
-        index: config.aboveEditor.order.length,
+        position,
+        index: position === "above" ? -1 : config.aboveEditor.order.length,
       },
     }
-  }
-
-  if (config.aboveEditor.unlisted === "below") {
-    return { kind: "native", placement: "belowEditor" }
   }
 
   return { kind: "native", placement: "aboveEditor" }

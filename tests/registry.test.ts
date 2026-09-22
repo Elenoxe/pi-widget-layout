@@ -12,11 +12,11 @@ function selectorRoute(index: number, selector = "*"): ManagedWidgetRoute {
   }
 }
 
-function unlistedRoute(index: number): ManagedWidgetRoute {
+function unlistedRoute(position: "above" | "below", index: number): ManagedWidgetRoute {
   return {
     kind: "managed",
     placement: "aboveEditor",
-    bucket: { kind: "unlisted", index },
+    bucket: { kind: "unlisted", position, index },
   }
 }
 
@@ -125,13 +125,22 @@ describe("WidgetRegistry", () => {
     expect(activeKeys(registry)).toEqual(["group-b", "group-a"])
   })
 
-  test("unlisted managed widgets follow explicit selector buckets", () => {
+  test("orders unlisted above, selectors, and unlisted below with stable first-seen slots", () => {
     const registry = new WidgetRegistry<string>()
-
-    registry.set("unlisted", "u", unlistedRoute(2))
-    registry.set("explicit", "e", selectorRoute(1, "explicit"))
-
-    expect(activeKeys(registry)).toEqual(["explicit", "unlisted"])
+    registry.set("selector-a", "a", selectorRoute(0))
+    registry.set("below-1", "b1", unlistedRoute("below", 2))
+    registry.set("above-1", "a1", unlistedRoute("above", -1))
+    registry.set("above-2", "a2", unlistedRoute("above", -1))
+    registry.set("selector-b", "b", selectorRoute(1))
+    registry.set("below-2", "b2", unlistedRoute("below", 2))
+    expect(activeKeys(registry)).toEqual([
+      "above-1",
+      "above-2",
+      "selector-a",
+      "selector-b",
+      "below-1",
+      "below-2",
+    ])
   })
 
   test("inactive records are excluded from active records", () => {
