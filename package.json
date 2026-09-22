@@ -1,6 +1,5 @@
 {
   "name": "@eleno/pi-widget-layout",
-  "module": "index.ts",
   "type": "module",
   "private": true,
   "scripts": {

@@ -5,11 +5,12 @@ import { join } from "node:path"
 import { describe, expect, test } from "bun:test"
 
 import {
-  DEFAULT_CONFIG,
   createDefaultConfig,
   loadWidgetLayoutConfig,
   parseWidgetLayoutConfig,
 } from "../src/config.ts"
+
+const DEFAULT_CONFIG = createDefaultConfig()
 
 function makeTempDirectory(): string {
   return mkdtempSync(join(tmpdir(), "pi-widget-layout-"))
