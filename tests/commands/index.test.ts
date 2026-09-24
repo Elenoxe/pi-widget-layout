@@ -56,7 +56,13 @@ function harness(withRuntime = true): Harness {
     },
   }
 
-  registerCommands(pi as unknown as ExtensionAPI, () => runtime)
+  registerCommands(
+    pi as unknown as ExtensionAPI,
+    () => runtime,
+    () => {
+      result.notifications.push({ message: "reload called" })
+    },
+  )
   return result
 }
 
@@ -92,6 +98,7 @@ describe("widget-layout command", () => {
         description: "Show current widget layout",
       },
     ])
+    expect(result.command?.getArgumentCompletions?.("r")?.[0]?.value).toBe("reload")
     expect(result.command?.getArgumentCompletions?.("status anything")).toBeNull()
   })
 
@@ -118,8 +125,14 @@ describe("widget-layout command", () => {
     await result.command!.handler("unknown", result.context)
 
     expect(result.notifications).toEqual([
-      { message: "Usage: /widget-layout [status]", type: "warning" },
+      { message: "Usage: /widget-layout [status|reload]", type: "warning" },
     ])
+    expect(result.appendedEntries).toHaveLength(0)
+  })
+  test("dispatches reload without appending a status entry", async () => {
+    const result = harness()
+    await result.command!.handler("reload", result.context)
+    expect(result.notifications).toEqual([{ message: "reload called" }])
     expect(result.appendedEntries).toHaveLength(0)
   })
 })

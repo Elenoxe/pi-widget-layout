@@ -32,6 +32,7 @@ interface ObservedWidget {
   key: string
   active: boolean
   lastSeen: number
+  content?: WidgetContent
 }
 
 export interface WidgetSetHandler {
@@ -54,7 +55,7 @@ export class WidgetLayoutController {
 
   constructor(
     private readonly ui: WidgetLayoutUI,
-    private readonly config: WidgetLayoutConfig,
+    private config: WidgetLayoutConfig,
   ) {
     this.previousSetWidget = ui.setWidget
     this.callPreviousSetWidget = ui.setWidget.bind(ui)
@@ -103,6 +104,92 @@ export class WidgetLayoutController {
     }
     this.installed = false
     this.owners.clear()
+  }
+
+  reload(config: WidgetLayoutConfig): void {
+    if (
+      PLACEMENTS.every(
+        (placement) =>
+          this.config[placement].unlisted === config[placement].unlisted &&
+          this.config[placement].order.length === config[placement].order.length &&
+          this.config[placement].order.every(
+            (selector, index) => selector === config[placement].order[index],
+          ),
+      )
+    ) {
+      this.config = config
+      return
+    }
+    const mounted: { key?: string; content?: WidgetContent; placement: WidgetPlacement }[] = []
+    const history: { key: string; placement: WidgetPlacement; lastSeen: number }[] = []
+    for (const placement of PLACEMENTS) {
+      const section = this.sections[placement]
+      const managed = section.registry.getRecords()
+      for (const record of [...managed].sort((a, b) => a.firstSeen - b.firstSeen)) {
+        if (this.owners.get(record.key) === placement) {
+          history.push({ key: record.key, placement, lastSeen: 0 })
+        }
+      }
+      for (const observation of section.observations.values()) {
+        if (!observation.active && this.owners.get(observation.key) === placement) {
+          history.push({ key: observation.key, placement, lastSeen: observation.lastSeen })
+        }
+      }
+      for (const key of section.layout) {
+        if (key === HOST_WIDGET_KEYS[placement]) {
+          mounted.push({ placement })
+          for (const record of managed) {
+            if (record.active && record.content !== undefined) {
+              mounted.push({ key: record.key, content: record.content, placement })
+            }
+          }
+        } else {
+          const content = section.observations.get(key)?.content
+          if (content !== undefined) mounted.push({ key, content, placement })
+        }
+      }
+    }
+    for (const placement of PLACEMENTS) {
+      const section = this.sections[placement]
+      if (section.host) {
+        section.host = undefined
+        this.forwardToPreviousSetWidget(HOST_WIDGET_KEYS[placement], undefined)
+      }
+      section.registry.reset()
+      section.observations.clear()
+      section.layout.clear()
+      section.compiledOrder = compileOrder(config[placement].order)
+    }
+    this.config = config
+    for (const { key, placement, lastSeen } of history) {
+      const section = this.sections[placement]
+      const route = routeWidget(key, placement, config, section.compiledOrder)
+      if (route.kind === "managed") section.registry.remember(key, route)
+      else
+        section.observations.set(key, { key, active: false, lastSeen: lastSeen || ++this.lastSeen })
+    }
+    for (const { key, content, placement } of mounted) {
+      if (key !== undefined && content !== undefined) {
+        this.handleSetWidget(key, content, { placement })
+      } else {
+        const section = this.sections[placement]
+        if (
+          !section.layout.has(HOST_WIDGET_KEYS[placement]) &&
+          section.registry.getRecords().length
+        ) {
+          section.layout.add(HOST_WIDGET_KEYS[placement])
+        }
+      }
+    }
+    for (const placement of PLACEMENTS) {
+      const section = this.sections[placement]
+      if (
+        !section.layout.has(HOST_WIDGET_KEYS[placement]) &&
+        section.registry.getRecords().length
+      ) {
+        section.layout.add(HOST_WIDGET_KEYS[placement])
+      }
+    }
   }
 
   getSnapshot(): WidgetLayoutSnapshot {
@@ -170,7 +257,7 @@ export class WidgetLayoutController {
     } else {
       this.clearWidget(placement, key)
       this.forwardToPreviousSetWidget(key, content, options)
-      section.observations.set(key, { key, active: true, lastSeen: ++this.lastSeen })
+      section.observations.set(key, { key, active: true, lastSeen: ++this.lastSeen, content })
     }
   }
 

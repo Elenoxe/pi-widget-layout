@@ -1,5 +1,5 @@
 import type { AutocompleteItem } from "@earendil-works/pi-tui"
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
 
 import { registerStatusCommand } from "./status.ts"
 import { WidgetLayoutCommandRegistry, type WidgetLayoutCommandRuntime } from "./registry.ts"
@@ -69,9 +69,15 @@ function registerRootCommand(pi: ExtensionAPI, registry: WidgetLayoutCommandRegi
 export function registerCommands(
   pi: ExtensionAPI,
   getRuntime: () => WidgetLayoutCommandRuntime | undefined,
+  reload: (ctx: ExtensionContext) => void,
 ): void {
   const registry = new WidgetLayoutCommandRegistry()
   registerStatusCommand(registry, { pi, getRuntime })
+  registry.register({
+    name: "reload",
+    description: "Reload widget layout configuration and reorder widgets",
+    run: (_args, ctx) => reload(ctx),
+  })
   registerRootCommand(pi, registry)
 }
 

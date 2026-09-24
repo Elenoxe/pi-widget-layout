@@ -298,4 +298,112 @@ describe("WidgetLayoutController", () => {
         .sections.every((section) => section.widgets.length === 0 && section.detached.length === 0),
     ).toBe(true)
   })
+  test("reloads active routes and stable historical slots without waiting for widget updates", () => {
+    const ui = new FakeUi()
+    const original = config()
+    const controller = new WidgetLayoutController(ui, original)
+    controller.install()
+    ui.setWidget("native-before", ["before"])
+    ui.setWidget("managed", ["managed"])
+    ui.setWidget("managed-2", ["second"])
+    ui.setWidget("native-after", ["after"])
+    ui.setWidget("managed-2", undefined)
+    ui.setWidget("retired", ["retired"])
+    ui.setWidget("retired", undefined)
+    const updated = {
+      ...original,
+      aboveEditor: {
+        unlisted: "native" as const,
+        order: ["native-after", "managed-2", "native-before", "managed"],
+      },
+    }
+    controller.reload(updated)
+    const above = controller.getSnapshot().sections[0]!
+    expect(above.order).toEqual(updated.aboveEditor.order)
+    expect(above.widgets.map(({ key, active }) => [key, active])).toEqual([
+      ["native-after", true],
+      ["managed-2", false],
+      ["native-before", true],
+      ["managed", true],
+    ])
+    expect(above.detached.map(({ key }) => key)).toEqual(["retired"])
+    expect(ui.widgets.has("native-before")).toBe(false)
+    expect(ui.widgets.has("native-after")).toBe(false)
+    expect(host(ui).render(80).join("\n")).toContain("after")
+    const again = {
+      ...original,
+      aboveEditor: { unlisted: "native" as const, order: ["native-before", "managed"] },
+    }
+    controller.reload(again)
+    expect(
+      controller.getSnapshot().sections[0]!.widgets.map(({ key, active }) => [key, active]),
+    ).toEqual([
+      ["native-after", true],
+      ["native-before", true],
+      ["managed", true],
+    ])
+    expect(controller.getSnapshot().sections[0]!.detached.map(({ key }) => key)).toContain(
+      "managed-2",
+    )
+    expect(ui.widgets.has("native-after")).toBe(true)
+    ui.setWidget("managed", undefined)
+    ui.setWidget("native-before", undefined)
+    controller.reload(updated)
+    expect(
+      controller
+        .getSnapshot()
+        .sections[0]?.widgets.some(({ key, active }) => key === "managed" && !active),
+    ).toBe(true)
+    const withRetired = {
+      ...updated,
+      aboveEditor: {
+        unlisted: "native" as const,
+        order: ["retired", ...updated.aboveEditor.order],
+      },
+    }
+    controller.reload(withRetired)
+    expect(
+      controller
+        .getSnapshot()
+        .sections[0]?.widgets.some(({ key, active }) => key === "retired" && !active),
+    ).toBe(true)
+    expect(
+      controller.getSnapshot().sections[0]?.detached.some(({ key }) => key === "retired"),
+    ).toBe(false)
+    controller.dispose()
+  })
+  test("unchanged layout and status-only reload keep factory components mounted", () => {
+    const ui = new FakeUi()
+    const settings = config()
+    const controller = new WidgetLayoutController(ui, settings)
+    controller.install()
+    let creations = 0
+    let disposals = 0
+    const factory: WidgetFactory = () => {
+      creations += 1
+      return {
+        render: () => ["widget"],
+        invalidate() {},
+        dispose() {
+          disposals += 1
+        },
+      }
+    }
+    ui.setWidget("managed", factory)
+    ui.setWidget("native", factory)
+    const hostComponent = ui.widgets.get(HOST_WIDGET_KEY)?.component
+    const nativeComponent = ui.widgets.get("native")?.component
+    const calls = ui.calls.length
+    controller.reload({
+      ...settings,
+      aboveEditor: { ...settings.aboveEditor, order: [...settings.aboveEditor.order] },
+    })
+    controller.reload({ ...settings, status: { ...settings.status, maxCollapsedLines: 20 } })
+    expect(ui.calls).toHaveLength(calls)
+    expect(ui.widgets.get(HOST_WIDGET_KEY)?.component).toBe(hostComponent)
+    expect(ui.widgets.get("native")?.component).toBe(nativeComponent)
+    expect(creations).toBe(2)
+    expect(disposals).toBe(0)
+    controller.dispose()
+  })
 })

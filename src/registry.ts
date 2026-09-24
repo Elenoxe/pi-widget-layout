@@ -74,6 +74,18 @@ export class WidgetRegistry<T> {
     return snapshotRecord(record)
   }
 
+  remember(key: string, route: ManagedWidgetRoute): void {
+    if (this.records.has(key)) return
+    this.records.set(key, {
+      key,
+      content: undefined,
+      route,
+      active: false,
+      firstSeen: this.nextFirstSeen++,
+      revision: 0,
+    })
+  }
+
   clear(key: string): void {
     const record = this.records.get(key)
     if (record === undefined) {

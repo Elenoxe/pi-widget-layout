@@ -16,6 +16,8 @@ Alternatively, install from GitHub:
 pi install git:github.com/Elenoxe/pi-widget-layout
 ```
 
+> **Important:** Put `pi-widget-layout` before the widget extensions you want to manage in Pi's `packages` list. Pi initializes extensions in order; widgets registered earlier keep native ordering until registered again.
+
 ## How it works
 
 Pi's interactive TUI is roughly composed of:
@@ -36,10 +38,11 @@ Extension widgets live in the `aboveEditor` and `belowEditor` areas. Pi normally
 
 ## Commands
 
-| Command                 | Description                    |
-| ----------------------- | ------------------------------ |
-| `/widget-layout`        | Show the current widget layout |
-| `/widget-layout status` | Same as `/widget-layout`       |
+| Command                 | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `/widget-layout`        | Show the current widget layout                   |
+| `/widget-layout status` | Same as `/widget-layout`                         |
+| `/widget-layout reload` | Re-read layout configuration and reorder widgets |
 
 ## Configuration
 

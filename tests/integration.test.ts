@@ -447,4 +447,103 @@ describe("widget layout integration", () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+  test("reload command reads project config and immediately reorders mounted widgets", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "widget-layout-reload-"))
+    try {
+      mkdirSync(join(directory, ".pi"))
+      const path = join(directory, ".pi", "widget-layout.json")
+      writeFileSync(path, JSON.stringify({ aboveEditor: { order: ["first", "second"] } }))
+      const harness = new Harness()
+      const events = new Map<string, (event: unknown, ctx: ExtensionContext) => void>()
+      let command: (args: string, ctx: ExtensionContext) => Promise<void>
+      let snapshot: unknown
+      let entryConfig: { maxCollapsedLines: number } | undefined
+      extension({
+        on: (name: string, handler: (event: unknown, ctx: ExtensionContext) => void) =>
+          events.set(name, handler),
+        registerCommand: (
+          _name: string,
+          value: { handler: (args: string, ctx: ExtensionContext) => Promise<void> },
+        ) => {
+          command = value.handler
+        },
+        registerEntryRenderer() {},
+        appendEntry: (
+          _type: string,
+          data: { snapshot: unknown; config: { maxCollapsedLines: number } },
+        ) => {
+          snapshot = data.snapshot
+          entryConfig = data.config
+        },
+      } as unknown as ExtensionAPI)
+      const context = {
+        hasUI: true,
+        mode: "tui",
+        cwd: directory,
+        isProjectTrusted: () => true,
+        ui: harness,
+      } as unknown as ExtensionContext
+      events.get("session_start")!({ reason: "startup" }, context)
+      harness.setWidget("native", ["native"])
+      harness.setWidget("second", ["second"])
+      harness.setWidget("first", ["first"])
+      expect(renderHost(harness)).toEqual([" first", " second"])
+      writeFileSync(path, JSON.stringify({ aboveEditor: { order: ["second", "native", "first"] } }))
+      await command!("reload", context)
+      expect(renderHost(harness)).toEqual([" second", " native", " first"])
+      expect(harness.widgets.has("native")).toBe(false)
+      await command!("status", context)
+      expect((snapshot as { sections: { order: string[] }[] }).sections[0]?.order).toEqual([
+        "second",
+        "native",
+        "first",
+      ])
+      const previousSnapshot = snapshot
+      const previousHost = managedHost(harness)
+      for (const invalid of ["{", JSON.stringify({ aboveEditor: { order: [42] } }), null]) {
+        rmSync(path)
+        if (invalid === null) mkdirSync(path)
+        else writeFileSync(path, invalid)
+        harness.notifications.length = 0
+        await command!("reload", context)
+        expect(managedHost(harness)).toBe(previousHost)
+        expect(renderHost(harness)).toEqual([" second", " native", " first"])
+        await command!("status", context)
+        expect(snapshot).toEqual(previousSnapshot)
+        expect(harness.notifications.length).toBeGreaterThan(0)
+        expect(harness.notifications).not.toContain("Widget layout reloaded")
+        if (invalid === null) rmSync(path, { recursive: true })
+      }
+      writeFileSync(path, JSON.stringify({ aboveEditor: { order: ["first", "second", "native"] } }))
+      harness.notifications.length = 0
+      await command!("reload", context)
+      expect(renderHost(harness)).toEqual([" first", " second", " native"])
+      expect(harness.notifications).toContain("Widget layout reloaded")
+      const stableHost = managedHost(harness)
+      const mounts = harness.hostMounts
+      writeFileSync(
+        path,
+        JSON.stringify({
+          status: { maxCollapsedLines: 20 },
+          aboveEditor: { order: ["first", "second", "native"] },
+        }),
+      )
+      await command!("reload", context)
+      await command!("status", context)
+      expect(managedHost(harness)).toBe(stableHost)
+      expect(harness.hostMounts).toBe(mounts)
+      expect(entryConfig?.maxCollapsedLines).toBe(20)
+      events.get("session_shutdown")!({ reason: "reload" }, context)
+      for (const widget of harness.widgets.values()) widget.component?.dispose?.()
+      harness.widgets.clear() // Pi /reload clears extension widgets before session_start.
+      events.get("session_start")!({ reason: "reload" }, context)
+      harness.setWidget("native", ["native"])
+      harness.setWidget("second", ["second"])
+      harness.setWidget("first", ["first"])
+      expect(renderHost(harness)).toEqual([" first", " second", " native"])
+      events.get("session_shutdown")!({}, context)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })

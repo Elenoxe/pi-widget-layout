@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
 
 import { registerCommands } from "./commands/index.ts"
 import type { WidgetLayoutCommandRuntime } from "./commands/registry.ts"
@@ -8,7 +8,32 @@ import { WidgetLayoutController } from "./controller.ts"
 export default function widgetLayoutExtension(pi: ExtensionAPI): void {
   let runtime: WidgetLayoutCommandRuntime | undefined
 
-  registerCommands(pi, () => runtime)
+  const readConfig = (ctx: ExtensionContext) => {
+    const result = loadWidgetLayoutConfig({
+      cwd: ctx.cwd,
+      projectTrusted: ctx.isProjectTrusted?.() ?? false,
+    })
+    for (const diagnostic of result.diagnostics) {
+      ctx.ui.notify(`[widget-layout] ${diagnostic.message}`, "warning")
+    }
+    return result
+  }
+
+  registerCommands(
+    pi,
+    () => runtime,
+    (ctx) => {
+      if (!runtime) return
+      const { config, diagnostics } = readConfig(ctx)
+      if (diagnostics.length > 0) {
+        ctx.ui.notify("Widget layout reload failed; keeping the current configuration", "warning")
+        return
+      }
+      runtime.controller.reload(config)
+      runtime = { controller: runtime.controller, config }
+      ctx.ui.notify("Widget layout reloaded", "info")
+    },
+  )
 
   pi.on("session_start", (_event, ctx) => {
     runtime?.controller.dispose()
@@ -18,14 +43,7 @@ export default function widgetLayoutExtension(pi: ExtensionAPI): void {
       return
     }
 
-    const { config, diagnostics } = loadWidgetLayoutConfig({
-      cwd: ctx.cwd,
-      projectTrusted: ctx.isProjectTrusted?.() ?? false,
-    })
-    for (const diagnostic of diagnostics) {
-      ctx.ui.notify(`[widget-layout] ${diagnostic.message}`, "warning")
-    }
-
+    const { config } = readConfig(ctx)
     const controller = new WidgetLayoutController(ctx.ui, config)
     controller.install()
     runtime = { controller, config }
